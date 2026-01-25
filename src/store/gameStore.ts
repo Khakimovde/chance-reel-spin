@@ -20,9 +20,7 @@ interface DrawResult {
 interface TaskCompletion {
   watchAd: number;
   inviteFriend: number;
-  shareStory: boolean;
   joinChannel: boolean;
-  rateApp: boolean;
 }
 
 interface PersistentStats {
@@ -39,7 +37,6 @@ interface PendingParticipation {
 
 interface GameState {
   coins: number;
-  tickets: number;
   referralCount: number;
   totalWinnings: number;
   selectedNumbers: number[];
@@ -52,8 +49,6 @@ interface GameState {
   
   // Actions
   addCoins: (amount: number) => void;
-  addTicket: () => void;
-  useTicket: () => boolean;
   addReferral: () => void;
   addWinnings: (amount: number) => void;
   selectNumber: (num: number) => void;
@@ -67,7 +62,6 @@ interface GameState {
   canSpinWheel: () => boolean;
   updatePersistentStats: (participated: boolean, won: boolean, earned: number) => void;
   setPendingParticipation: (participation: PendingParticipation | null) => void;
-  confirmParticipation: () => boolean;
   syncWithBackend: (coins: number, tickets: number, referralCount: number, totalWinnings: number) => void;
 }
 
@@ -75,6 +69,7 @@ const DRAW_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const MAX_NUMBERS = 7;
 
 // Get the next draw slot (synchronized for all users)
+// CRITICAL: This returns the NEXT upcoming draw time, not the current slot
 export const getNextDrawSlot = (): Date => {
   const now = Date.now();
   const currentSlot = Math.floor(now / DRAW_INTERVAL) * DRAW_INTERVAL;
@@ -153,7 +148,6 @@ export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       coins: 0,
-      tickets: 0,
       referralCount: 0,
       totalWinnings: 0,
       selectedNumbers: [],
@@ -162,9 +156,7 @@ export const useGameStore = create<GameState>()(
       taskCompletion: {
         watchAd: 0,
         inviteFriend: 0,
-        shareStory: false,
         joinChannel: false,
-        rateApp: false,
       },
       drawHistory: [],
       persistentStats: {
@@ -175,15 +167,6 @@ export const useGameStore = create<GameState>()(
       pendingParticipation: null,
 
       addCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
-      addTicket: () => set((state) => ({ tickets: state.tickets + 1 })),
-      useTicket: () => {
-        const { tickets } = get();
-        if (tickets > 0) {
-          set({ tickets: tickets - 1 });
-          return true;
-        }
-        return false;
-      },
       addReferral: () => set((state) => ({ referralCount: state.referralCount + 1 })),
       addWinnings: (amount) => set((state) => ({ 
         totalWinnings: state.totalWinnings + amount,
@@ -224,9 +207,8 @@ export const useGameStore = create<GameState>()(
             taskCompletion: {
               watchAd: 0,
               inviteFriend: 0,
-              shareStory: false,
-              joinChannel: false,
-              rateApp: false,
+              // joinChannel doesn't reset - it's unlimited once verified
+              joinChannel: get().taskCompletion.joinChannel,
             }
           });
           return true;
@@ -251,32 +233,8 @@ export const useGameStore = create<GameState>()(
         }
       })),
       setPendingParticipation: (participation) => set({ pendingParticipation: participation }),
-      confirmParticipation: () => {
-        const { selectedNumbers, useTicket } = get();
-        
-        if (selectedNumbers.length !== MAX_NUMBERS) {
-          return false;
-        }
-        
-        if (!useTicket()) {
-          return false;
-        }
-        
-        const drawSlot = getCurrentDrawSlot();
-        const nextDraw = getNextDrawSlot();
-        set({ 
-          pendingParticipation: {
-            selectedNumbers: [...selectedNumbers],
-            drawSlot,
-            drawTime: nextDraw
-          }
-        });
-        
-        return true;
-      },
-      syncWithBackend: (coins, tickets, referralCount, totalWinnings) => set({
+      syncWithBackend: (coins, _tickets, referralCount, totalWinnings) => set({
         coins,
-        tickets,
         referralCount,
         totalWinnings,
       }),

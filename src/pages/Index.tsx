@@ -8,7 +8,7 @@ import { HistoryTab } from '@/components/HistoryTab';
 import { ProfileTab } from '@/components/ProfileTab';
 import { useTelegram } from '@/hooks/useTelegram';
 import { initTelegramApp } from '@/lib/telegram';
-import { Coins, Ticket } from 'lucide-react';
+import { Coins } from 'lucide-react';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('lottery');
@@ -20,7 +20,6 @@ const Index = () => {
 
   // Use user's backend-synced data
   const coins = user?.coins ?? 0;
-  const tickets = user?.tickets ?? 0;
 
   const renderTab = () => {
     switch (activeTab) {
@@ -67,7 +66,7 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Balance Cards */}
+            {/* Balance Card - Only coins, no tickets */}
             <div className="flex items-center gap-2">
               <motion.div 
                 className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 px-3 py-1.5 rounded-full"
@@ -78,16 +77,6 @@ const Index = () => {
                   <Coins className="w-3 h-3 text-white" />
                 </div>
                 <span className="text-sm font-bold text-amber-700">{coins.toLocaleString()}</span>
-              </motion.div>
-              <motion.div 
-                className="flex items-center gap-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/50 px-3 py-1.5 rounded-full"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
-                  <Ticket className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-sm font-bold text-blue-700">{tickets}</span>
               </motion.div>
             </div>
           </div>

@@ -28,7 +28,7 @@ export const useTelegram = () => {
     const state = useGameStore.getState();
     return {
       coins: state.coins,
-      tickets: state.tickets,
+      tickets: 0,
       referral_count: state.referralCount,
       total_winnings: state.totalWinnings,
     };
