@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
-import { hapticFeedback, getTelegramWebApp } from '@/lib/telegram';
+import { hapticFeedback } from '@/lib/telegram';
 import { showAd, loadAdSdk } from '@/lib/adService';
 import { useTelegram } from '@/hooks/useTelegram';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Play, Users, Bell, Coins, 
-  CheckCircle, ChevronRight, Loader2, ListTodo
+  CheckCircle, ChevronRight, Loader2, ListTodo, Clock
 } from 'lucide-react';
 
 interface DailyTask {
@@ -26,22 +26,44 @@ interface DailyTask {
   isTimed: boolean;
 }
 
+const formatTimeRemaining = (ms: number): string => {
+  if (ms <= 0) return '00:00:00';
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
 export const MysteryTab = () => {
   const { 
     addCoins, taskCompletion, completeTask, 
-    resetTasksIfNeeded
+    resetTasksIfNeeded, getTaskResetTime
   } = useGameStore();
   const { user } = useTelegram();
   const [selectedTask, setSelectedTask] = useState<DailyTask | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [channelVerified, setChannelVerified] = useState(false);
   const [checkingChannel, setCheckingChannel] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(0);
 
   // Preload ad SDK and check task reset
   useEffect(() => {
     loadAdSdk();
     resetTasksIfNeeded();
   }, [resetTasksIfNeeded]);
+
+  // Update countdown timer for timed tasks
+  useEffect(() => {
+    const updateTimer = () => {
+      const resetTime = getTaskResetTime();
+      const remaining = resetTime.getTime() - Date.now();
+      setTimeRemaining(Math.max(0, remaining));
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [getTaskResetTime]);
 
   // Build tasks from current completion state
   // Watch ad and invite friends are timed (reset every 6 hours)
@@ -182,6 +204,9 @@ export const MysteryTab = () => {
 
   const completedCount = tasks.filter(t => t.completed).length;
 
+  // Check if timed tasks are all completed
+  const timedTasksCompleted = taskCompletion.watchAd >= 10 && taskCompletion.inviteFriend >= 2;
+
   return (
     <div className="space-y-4 pb-4">
       {/* Header */}
@@ -246,12 +271,6 @@ export const MysteryTab = () => {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground">{task.title}</span>
-                  {task.completed && (
-                    <span className="px-2 py-0.5 bg-success/20 text-success text-xs font-semibold rounded-full flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" />
-                      Bajarildi
-                    </span>
-                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">{task.description}</p>
                 <div className="flex items-center gap-2 mt-1.5">
@@ -279,13 +298,26 @@ export const MysteryTab = () => {
                 )}
               </div>
 
-              {/* Action */}
-              {!task.completed && (
-                <div className="flex items-center gap-1 text-primary">
-                  <span className="text-xs font-semibold">{task.action}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              )}
+              {/* Action / Status */}
+              <div className="flex flex-col items-end gap-1">
+                {task.completed ? (
+                  <span className="px-2 py-1 bg-success/20 text-success text-xs font-semibold rounded-lg flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Bajarildi
+                  </span>
+                ) : task.isTimed && timedTasksCompleted ? (
+                  // Show countdown timer for timed tasks that are completed
+                  <div className="flex items-center gap-1 text-muted-foreground bg-muted px-2 py-1 rounded-lg">
+                    <Clock className="w-3 h-3" />
+                    <span className="text-[10px] font-medium">{formatTimeRemaining(timeRemaining)}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-primary">
+                    <span className="text-xs font-semibold">{task.action}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
             </motion.button>
           ))}
         </motion.div>
