@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTelegram } from '@/hooks/useTelegram';
 import { TrustBadge } from './TrustBadge';
+import { WithdrawalHistory } from './WithdrawalHistory';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Coins, 
@@ -14,7 +15,8 @@ import {
   Banknote,
   CreditCard,
   AlertCircle,
-  Loader2
+  Loader2,
+  History
 } from 'lucide-react';
 import { hapticFeedback } from '@/lib/telegram';
 import { toast } from 'sonner';
@@ -235,6 +237,20 @@ export const ProfileTab = () => {
             Minimal yechish: 1000 tanga
           </p>
         )}
+      </div>
+
+      {/* Withdrawal History Section */}
+      <div className="glass-card-elevated p-3 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center shadow-sm">
+            <History className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-foreground">Pul yechish tarixi</h3>
+            <p className="text-[10px] text-muted-foreground">So'rovlaringiz holati</p>
+          </div>
+        </div>
+        <WithdrawalHistory />
       </div>
 
       {/* Withdrawal Modal */}

@@ -6,13 +6,21 @@ import { WheelTab } from '@/components/WheelTab';
 import { MysteryTab } from '@/components/MysteryTab';
 import { HistoryTab } from '@/components/HistoryTab';
 import { ProfileTab } from '@/components/ProfileTab';
+import { AdminPanel } from '@/components/AdminPanel';
 import { useTelegram } from '@/hooks/useTelegram';
-import { initTelegramApp } from '@/lib/telegram';
-import { Coins } from 'lucide-react';
+import { initTelegramApp, getTelegramUser } from '@/lib/telegram';
+import { Coins, Shield } from 'lucide-react';
+
+const ADMIN_TELEGRAM_ID = 5326022510;
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('lottery');
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const { user } = useTelegram();
+  
+  // Check if current user is admin
+  const telegramUser = getTelegramUser();
+  const isAdmin = telegramUser?.id === ADMIN_TELEGRAM_ID;
 
   useEffect(() => {
     initTelegramApp();
@@ -37,6 +45,11 @@ const Index = () => {
         return <LotteryTab />;
     }
   };
+
+  // If admin panel is open, show it
+  if (showAdminPanel) {
+    return <AdminPanel onBack={() => setShowAdminPanel(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -66,8 +79,21 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Balance Card - Only coins, no tickets */}
+            {/* Balance Card and Admin Button */}
             <div className="flex items-center gap-2">
+              {isAdmin && (
+                <motion.button
+                  onClick={() => setShowAdminPanel(true)}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-red-50 to-rose-50 border border-red-200/50 px-3 py-1.5 rounded-full"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center">
+                    <Shield className="w-3 h-3 text-white" />
+                  </div>
+                  <span className="text-sm font-bold text-red-700">Admin</span>
+                </motion.button>
+              )}
               <motion.div 
                 className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 px-3 py-1.5 rounded-full"
                 whileHover={{ scale: 1.02 }}
