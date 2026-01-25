@@ -13,7 +13,13 @@ import {
   Eye,
   TrendingUp,
   Clock,
-  Banknote
+  Banknote,
+  Settings,
+  Bell,
+  Plus,
+  Minus,
+  Search,
+  Coins
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { hapticFeedback } from '@/lib/telegram';
@@ -31,6 +37,7 @@ interface Withdrawal {
     last_name: string | null;
     username: string | null;
     telegram_id: number;
+    coins: number;
   };
 }
 
@@ -42,18 +49,30 @@ interface Stats {
   totalGamesPlayed: number;
   pendingWithdrawals: number;
   totalWithdrawalsAmount: number;
+  totalCoinsInSystem: number;
 }
 
 interface AdminPanelProps {
   onBack: () => void;
 }
 
+// Constants for withdrawal
+const MIN_WITHDRAWAL = 5000; // 5000 tanga = 10,000 som
+const COIN_TO_SOM_RATE = 2; // 1 tanga = 2 som
+
 export const AdminPanel = ({ onBack }: AdminPanelProps) => {
-  const [activeSection, setActiveSection] = useState<'stats' | 'withdrawals'>('stats');
+  const [activeSection, setActiveSection] = useState<'stats' | 'withdrawals' | 'channels' | 'users'>('stats');
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  
+  // User management
+  const [searchTelegramId, setSearchTelegramId] = useState('');
+  const [foundUser, setFoundUser] = useState<any>(null);
+  const [coinAmount, setCoinAmount] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [isUpdatingCoins, setIsUpdatingCoins] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -83,10 +102,11 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         .select('*', { count: 'exact', head: true });
 
       // Calculate stats
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
       const totalAdsWatched = users?.reduce((sum, u) => sum + (u.task_watch_ad || 0), 0) || 0;
+      const totalCoinsInSystem = users?.reduce((sum, u) => sum + (u.coins || 0), 0) || 0;
+      
+      // Count wheel spins (users who have last_wheel_spin set)
+      const wheelSpinners = users?.filter(u => u.last_wheel_spin).length || 0;
       
       // Get users who have user data for withdrawals
       const usersMap = new Map(users?.map(u => [u.id, u]) || []);
@@ -102,11 +122,12 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       setStats({
         totalUsers: users?.length || 0,
         totalAdsWatched,
-        dailyAdsWatched: 0, // Would need daily tracking
-        totalWheelSpins: users?.filter(u => u.last_wheel_spin).length || 0,
+        dailyAdsWatched: 0,
+        totalWheelSpins: wheelSpinners,
         totalGamesPlayed: gamesCount || 0,
         pendingWithdrawals,
         totalWithdrawalsAmount,
+        totalCoinsInSystem,
       });
 
       setWithdrawals(enrichedWithdrawals);
@@ -139,14 +160,14 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         if (withdrawal) {
           const { data: userData } = await supabase
             .from('users')
-            .select('total_winnings')
+            .select('coins')
             .eq('id', withdrawal.user_id)
-            .single();
+            .maybeSingle();
 
           if (userData) {
             await supabase
               .from('users')
-              .update({ total_winnings: userData.total_winnings + withdrawal.amount })
+              .update({ coins: userData.coins + withdrawal.amount })
               .eq('id', withdrawal.user_id);
           }
         }
@@ -156,7 +177,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       toast.success(
         action === 'approve' ? 'So\'rov tasdiqlandi' :
         action === 'pay' ? 'To\'lov amalga oshirildi' :
-        'So\'rov rad etildi'
+        'So\'rov rad etildi va tangalar qaytarildi'
       );
       
       await fetchData();
@@ -165,6 +186,89 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       toast.error('Xatolik yuz berdi');
     } finally {
       setProcessingId(null);
+    }
+  };
+
+  const searchUserByTelegramId = async () => {
+    if (!searchTelegramId.trim()) {
+      toast.error('Telegram ID kiriting');
+      return;
+    }
+
+    setIsSearching(true);
+    setFoundUser(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', parseInt(searchTelegramId))
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setFoundUser(data);
+        hapticFeedback('success');
+      } else {
+        toast.error('Foydalanuvchi topilmadi');
+        hapticFeedback('error');
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error('Qidirishda xatolik');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const updateUserCoins = async (action: 'add' | 'subtract') => {
+    if (!foundUser || !coinAmount || isNaN(parseInt(coinAmount))) {
+      toast.error('Tanga miqdorini kiriting');
+      return;
+    }
+
+    const amount = parseInt(coinAmount);
+    if (amount <= 0) {
+      toast.error('Musbat son kiriting');
+      return;
+    }
+
+    if (action === 'subtract' && amount > foundUser.coins) {
+      toast.error('Foydalanuvchida yetarli tanga yo\'q');
+      return;
+    }
+
+    setIsUpdatingCoins(true);
+
+    try {
+      const newCoins = action === 'add' 
+        ? foundUser.coins + amount 
+        : foundUser.coins - amount;
+
+      const { error } = await supabase
+        .from('users')
+        .update({ coins: newCoins })
+        .eq('id', foundUser.id);
+
+      if (error) throw error;
+
+      setFoundUser({ ...foundUser, coins: newCoins });
+      setCoinAmount('');
+      hapticFeedback('success');
+      toast.success(
+        action === 'add' 
+          ? `${amount} tanga qo'shildi` 
+          : `${amount} tanga ayirildi`
+      );
+      
+      // Refresh stats
+      await fetchData();
+    } catch (error) {
+      console.error('Update error:', error);
+      toast.error('Yangilashda xatolik');
+    } finally {
+      setIsUpdatingCoins(false);
     }
   };
 
@@ -207,11 +311,11 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       </header>
 
       {/* Navigation Tabs */}
-      <div className="px-4 py-3 border-b border-glass-border">
-        <div className="flex gap-2">
+      <div className="px-4 py-3 border-b border-glass-border overflow-x-auto">
+        <div className="flex gap-2 min-w-max">
           <button
             onClick={() => setActiveSection('stats')}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            className={`py-2 px-4 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
               activeSection === 'stats'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground'
@@ -222,7 +326,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
           </button>
           <button
             onClick={() => setActiveSection('withdrawals')}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            className={`py-2 px-4 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
               activeSection === 'withdrawals'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground'
@@ -236,11 +340,34 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveSection('channels')}
+            className={`py-2 px-4 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              activeSection === 'channels'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            Kanallar
+          </button>
+          <button
+            onClick={() => setActiveSection('users')}
+            className={`py-2 px-4 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              activeSection === 'users'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Foydalanuvchilar
+          </button>
         </div>
       </div>
 
       <div className="p-4 space-y-4 pb-20">
         <AnimatePresence mode="wait">
+          {/* Stats Section */}
           {activeSection === 'stats' && stats && (
             <motion.div
               key="stats"
@@ -312,11 +439,28 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                 </motion.div>
               </div>
 
-              {/* Financial Stats */}
+              {/* System Stats */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
+                className="glass-card-elevated p-4 space-y-3"
+              >
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-amber-500" />
+                  Tizim statistikasi
+                </h3>
+                <div className="p-3 bg-amber-50 rounded-xl">
+                  <p className="text-xs text-amber-600 mb-1">Tizimdagi jami tangalar</p>
+                  <p className="text-xl font-bold text-amber-700">{stats.totalCoinsInSystem.toLocaleString()} tanga</p>
+                </div>
+              </motion.div>
+
+              {/* Financial Stats */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
                 className="glass-card-elevated p-4 space-y-3"
               >
                 <h3 className="font-semibold text-foreground flex items-center gap-2">
@@ -330,13 +474,18 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   </div>
                   <div className="p-3 bg-green-50 rounded-xl">
                     <p className="text-xs text-green-600 mb-1">Jami to'langan</p>
-                    <p className="text-xl font-bold text-green-700">{stats.totalWithdrawalsAmount} tanga</p>
+                    <p className="text-xl font-bold text-green-700">{stats.totalWithdrawalsAmount.toLocaleString()} tanga</p>
                   </div>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-xl">
+                  <p className="text-xs text-blue-600 mb-1">Minimal yechish miqdori</p>
+                  <p className="text-lg font-bold text-blue-700">{MIN_WITHDRAWAL.toLocaleString()} tanga = {(MIN_WITHDRAWAL * COIN_TO_SOM_RATE).toLocaleString()} so'm</p>
                 </div>
               </motion.div>
             </motion.div>
           )}
 
+          {/* Withdrawals Section */}
           {activeSection === 'withdrawals' && (
             <motion.div
               key="withdrawals"
@@ -345,6 +494,13 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-3"
             >
+              {/* Info Card */}
+              <div className="glass-card p-3 bg-blue-50/50">
+                <p className="text-xs text-blue-700">
+                  💡 Minimal yechish: <strong>{MIN_WITHDRAWAL.toLocaleString()} tanga = {(MIN_WITHDRAWAL * COIN_TO_SOM_RATE).toLocaleString()} so'm</strong>
+                </p>
+              </div>
+
               {withdrawals.length === 0 ? (
                 <div className="glass-card-elevated p-8 text-center">
                   <Wallet className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
@@ -367,13 +523,19 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                         <p className="text-xs text-muted-foreground">
                           @{withdrawal.user?.username || 'username yo\'q'} • ID: {withdrawal.user?.telegram_id}
                         </p>
+                        <p className="text-xs text-muted-foreground">
+                          Joriy balans: {withdrawal.user?.coins?.toLocaleString() || 0} tanga
+                        </p>
                       </div>
                       {getStatusBadge(withdrawal.status)}
                     </div>
 
                     <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg">
                       <span className="text-sm text-muted-foreground">Miqdor:</span>
-                      <span className="font-bold text-foreground">{withdrawal.amount} tanga</span>
+                      <div className="text-right">
+                        <span className="font-bold text-foreground">{withdrawal.amount.toLocaleString()} tanga</span>
+                        <span className="text-xs text-muted-foreground block">= {(withdrawal.amount * COIN_TO_SOM_RATE).toLocaleString()} so'm</span>
+                      </div>
                     </div>
 
                     {withdrawal.wallet_address && (
@@ -433,6 +595,162 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                     )}
                   </motion.div>
                 ))
+              )}
+            </motion.div>
+          )}
+
+          {/* Channels Section */}
+          {activeSection === 'channels' && (
+            <motion.div
+              key="channels"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="glass-card-elevated p-4 space-y-4">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-cyan-500" />
+                  Majburiy kanal sozlamalari
+                </h3>
+                
+                <div className="p-4 bg-cyan-50/50 rounded-xl space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Kanal username</label>
+                    <input
+                      type="text"
+                      placeholder="@LotteryChannel"
+                      className="w-full p-3 rounded-lg border border-border bg-background text-sm"
+                      defaultValue="@LotteryChannel"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Obuna uchun tanga mukofoti</label>
+                    <input
+                      type="number"
+                      placeholder="200"
+                      className="w-full p-3 rounded-lg border border-border bg-background text-sm"
+                      defaultValue="200"
+                    />
+                  </div>
+                  <button className="w-full py-3 rounded-xl bg-cyan-500 text-white font-semibold">
+                    Saqlash
+                  </button>
+                </div>
+                
+                <p className="text-xs text-muted-foreground">
+                  ⚠️ Kanal sozlamalarini o'zgartirish uchun kod yangilash kerak bo'ladi.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Users Section */}
+          {activeSection === 'users' && (
+            <motion.div
+              key="users"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              {/* Search User */}
+              <div className="glass-card-elevated p-4 space-y-4">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Search className="w-5 h-5 text-blue-500" />
+                  Foydalanuvchi qidirish
+                </h3>
+                
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={searchTelegramId}
+                    onChange={(e) => setSearchTelegramId(e.target.value)}
+                    placeholder="Telegram ID kiriting"
+                    className="flex-1 p-3 rounded-lg border border-border bg-background text-sm"
+                  />
+                  <button
+                    onClick={searchUserByTelegramId}
+                    disabled={isSearching}
+                    className="px-4 py-3 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2"
+                  >
+                    {isSearching ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Found User */}
+              {foundUser && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass-card-elevated p-4 space-y-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Users className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {foundUser.first_name} {foundUser.last_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        @{foundUser.username || 'username yo\'q'} • ID: {foundUser.telegram_id}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-amber-50 rounded-xl">
+                    <p className="text-xs text-amber-600 mb-1">Joriy balans</p>
+                    <p className="text-2xl font-bold text-amber-700">{foundUser.coins?.toLocaleString() || 0} tanga</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium text-foreground">Tanga miqdori</label>
+                    <input
+                      type="number"
+                      value={coinAmount}
+                      onChange={(e) => setCoinAmount(e.target.value)}
+                      placeholder="Miqdorni kiriting"
+                      className="w-full p-3 rounded-lg border border-border bg-background text-sm"
+                    />
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateUserCoins('add')}
+                        disabled={isUpdatingCoins || !coinAmount}
+                        className="flex-1 py-3 rounded-lg bg-green-500 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isUpdatingCoins ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4" />
+                            Qo'shish
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => updateUserCoins('subtract')}
+                        disabled={isUpdatingCoins || !coinAmount}
+                        className="flex-1 py-3 rounded-lg bg-red-500 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isUpdatingCoins ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Minus className="w-4 h-4" />
+                            Ayirish
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
               )}
             </motion.div>
           )}

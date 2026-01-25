@@ -260,11 +260,11 @@ export const WheelTab = () => {
             })}
           </motion.div>
 
-          {/* Center button with prize display */}
+          {/* Center button - clean design without logo */}
           <motion.button
             onClick={handleSpin}
             disabled={isSpinning || isLoadingAd || !canSpin}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full z-10 focus:outline-none"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full z-10 focus:outline-none"
             whileHover={!isSpinning && !isLoadingAd && canSpin ? { scale: 1.08 } : {}}
             whileTap={!isSpinning && !isLoadingAd && canSpin ? { scale: 0.95 } : {}}
           >
@@ -276,23 +276,20 @@ export const WheelTab = () => {
                   : 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600'
             }`}>
               {isLoadingAd ? (
-                <Loader2 className="w-8 h-8 text-white animate-spin" />
+                <Loader2 className="w-6 h-6 text-white animate-spin" />
               ) : isSpinning ? (
-                <motion.span 
-                  className="text-3xl"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                >
-                  ✨
-                </motion.span>
-              ) : result && showCelebration ? (
-                <div className="text-center">
-                  <span className="text-lg font-black text-white">+{result.label}</span>
-                  <span className="text-[8px] text-white/80 block">{result.sublabel}</span>
+                <div className="flex flex-col items-center">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="text-2xl"
+                  >
+                    🎰
+                  </motion.div>
                 </div>
               ) : (
-                <span className="text-sm font-black text-white drop-shadow-md text-center leading-tight">
-                  {canSpin ? 'AYLANTIR' : 'KUTISH'}
+                <span className="text-xs font-black text-white drop-shadow-md text-center leading-tight">
+                  {canSpin ? 'BOSISH' : 'KUTISH'}
                 </span>
               )}
             </div>
@@ -312,71 +309,82 @@ export const WheelTab = () => {
         </motion.div>
       )}
 
-      {/* Result Celebration */}
+      {/* Result Celebration - Centered Modal */}
       <AnimatePresence>
         {result && showCelebration && (
           <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            className="glass-card-elevated p-6 text-center space-y-4 relative overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowCelebration(false)}
           >
-            {/* Sparkles background */}
-            <div className="absolute inset-0 pointer-events-none">
-              {[...Array(15)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  className="absolute text-xl"
-                  initial={{ 
-                    x: Math.random() * 100 + '%', 
-                    y: '100%', 
-                    opacity: 0 
-                  }}
-                  animate={{ 
-                    y: '-20%', 
-                    opacity: [0, 1, 0],
-                    rotate: Math.random() * 360
-                  }}
-                  transition={{ 
-                    duration: 2, 
-                    delay: Math.random() * 0.5,
-                    repeat: Infinity
-                  }}
-                >
-                  ✨
-                </motion.div>
-              ))}
-            </div>
-
             <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: 'spring', bounce: 0.5, delay: 0.2 }}
-              className={`w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br ${result.bg} flex items-center justify-center shadow-xl`}
+              initial={{ opacity: 0, scale: 0.7, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              transition={{ type: 'spring', bounce: 0.4 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card w-full max-w-sm rounded-3xl p-8 text-center space-y-5 relative overflow-hidden shadow-2xl"
             >
-              <result.icon className="w-10 h-10 text-white" />
-            </motion.div>
+              {/* Sparkles background */}
+              <div className="absolute inset-0 pointer-events-none">
+                {[...Array(20)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute text-xl"
+                    initial={{ 
+                      x: Math.random() * 100 + '%', 
+                      y: '100%', 
+                      opacity: 0 
+                    }}
+                    animate={{ 
+                      y: '-20%', 
+                      opacity: [0, 1, 0],
+                      rotate: Math.random() * 360
+                    }}
+                    transition={{ 
+                      duration: 2.5, 
+                      delay: Math.random() * 0.5,
+                      repeat: Infinity
+                    }}
+                  >
+                    {['✨', '🎉', '⭐', '🌟'][Math.floor(Math.random() * 4)]}
+                  </motion.div>
+                ))}
+              </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <p className="text-muted-foreground text-sm">🎉 Tabriklaymiz!</p>
-              <p className="text-3xl font-black mt-2 text-foreground">
-                +{result.label} {result.sublabel}
-              </p>
-            </motion.div>
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', bounce: 0.5, delay: 0.2 }}
+                className={`w-24 h-24 mx-auto rounded-3xl bg-gradient-to-br ${result.bg} flex items-center justify-center shadow-xl`}
+              >
+                <result.icon className="w-12 h-12 text-white" />
+              </motion.div>
 
-            <motion.button
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              onClick={() => setShowCelebration(false)}
-              className="w-full py-3.5 rounded-xl gradient-primary text-white font-semibold shadow-md"
-            >
-              Ajoyib! 🎊
-            </motion.button>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <p className="text-lg text-muted-foreground">🎊 Tabriklaymiz!</p>
+                <p className="text-4xl font-black mt-3 text-foreground">
+                  +{result.label} {result.sublabel}
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">Balansga qo'shildi!</p>
+              </motion.div>
+
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                onClick={() => setShowCelebration(false)}
+                className="w-full py-4 rounded-2xl gradient-primary text-white font-bold shadow-lg text-lg"
+              >
+                Ajoyib! 🎊
+              </motion.button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
