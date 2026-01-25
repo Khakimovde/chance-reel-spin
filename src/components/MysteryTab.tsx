@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import { hapticFeedback, getTelegramWebApp } from '@/lib/telegram';
 import { showAd, loadAdSdk } from '@/lib/adService';
+import { useTelegram } from '@/hooks/useTelegram';
+import { supabase } from '@/integrations/supabase/client';
 import { 
-  Play, Users, Share2, 
-  Bell, Star, Coins, Ticket,
-  CheckCircle, ChevronRight, Loader2, Clock, ListTodo
+  Play, Users, Bell, Coins, 
+  CheckCircle, ChevronRight, Loader2, ListTodo
 } from 'lucide-react';
 
 interface DailyTask {
@@ -21,39 +22,20 @@ interface DailyTask {
   completed: boolean;
   action: string;
   color: string;
-  taskKey: 'watchAd' | 'inviteFriend' | 'shareStory' | 'joinChannel' | 'rateApp';
+  taskKey: 'watchAd' | 'inviteFriend' | 'joinChannel';
+  isTimed: boolean;
 }
-
-const formatTimeRemaining = (ms: number): string => {
-  if (ms <= 0) return '00:00:00';
-  const hours = Math.floor(ms / (1000 * 60 * 60));
-  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((ms % (1000 * 60)) / 1000);
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-};
-
-// Get next reset time display (00:00, 06:00, 12:00, 18:00)
-const getNextResetTimeDisplay = (): string => {
-  const now = new Date();
-  const currentHour = now.getHours();
-  const resetHours = [0, 6, 12, 18];
-  let nextResetHour = resetHours.find(h => h > currentHour);
-  
-  if (nextResetHour === undefined) {
-    nextResetHour = 0;
-  }
-  
-  return `${nextResetHour.toString().padStart(2, '0')}:00`;
-};
 
 export const MysteryTab = () => {
   const { 
-    addCoins, addTicket, taskCompletion, completeTask, 
-    resetTasksIfNeeded, getTaskResetTime 
+    addCoins, taskCompletion, completeTask, 
+    resetTasksIfNeeded
   } = useGameStore();
+  const { user } = useTelegram();
   const [selectedTask, setSelectedTask] = useState<DailyTask | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [channelVerified, setChannelVerified] = useState(false);
+  const [checkingChannel, setCheckingChannel] = useState(false);
 
   // Preload ad SDK and check task reset
   useEffect(() => {
@@ -61,20 +43,9 @@ export const MysteryTab = () => {
     resetTasksIfNeeded();
   }, [resetTasksIfNeeded]);
 
-  // Update countdown timer
-  useEffect(() => {
-    const updateTimer = () => {
-      const resetTime = getTaskResetTime();
-      const remaining = resetTime.getTime() - Date.now();
-      setTimeRemaining(remaining);
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [getTaskResetTime]);
-
   // Build tasks from current completion state
+  // Watch ad and invite friends are timed (reset every 6 hours)
+  // Join channel is unlimited but requires Telegram verification
   const tasks: DailyTask[] = [
     {
       id: 'watch_ad',
@@ -89,6 +60,7 @@ export const MysteryTab = () => {
       action: 'Ko\'rish',
       color: '#F59E0B',
       taskKey: 'watchAd',
+      isTimed: true,
     },
     {
       id: 'invite_friend',
@@ -96,55 +68,29 @@ export const MysteryTab = () => {
       description: `${taskCompletion.inviteFriend}/2 ta do'st taklif qilindi`,
       icon: Users,
       image: '👥',
-      reward: { type: 'ticket', value: 1, label: '1 Chipta' },
+      reward: { type: 'coins', value: 100, label: '100 Tanga' },
       maxCount: 2,
       currentCount: taskCompletion.inviteFriend,
       completed: taskCompletion.inviteFriend >= 2,
       action: 'Taklif qilish',
       color: '#3B82F6',
       taskKey: 'inviteFriend',
-    },
-    {
-      id: 'share_story',
-      title: 'Story ulashish',
-      description: 'Telegramda story ulashing',
-      icon: Share2,
-      image: '📱',
-      reward: { type: 'coins', value: 100, label: '100 Tanga' },
-      maxCount: 1,
-      currentCount: taskCompletion.shareStory ? 1 : 0,
-      completed: taskCompletion.shareStory,
-      action: 'Ulashish',
-      color: '#8B5CF6',
-      taskKey: 'shareStory',
+      isTimed: true,
     },
     {
       id: 'join_channel',
       title: 'Kanalga qo\'shilish',
-      description: 'Rasmiy kanalga obuna bo\'ling',
+      description: taskCompletion.joinChannel ? 'Obuna tasdiqlangan ✓' : 'Rasmiy kanalga obuna bo\'ling',
       icon: Bell,
       image: '📢',
-      reward: { type: 'ticket', value: 2, label: '2 Chipta' },
+      reward: { type: 'coins', value: 200, label: '200 Tanga' },
       maxCount: 1,
       currentCount: taskCompletion.joinChannel ? 1 : 0,
       completed: taskCompletion.joinChannel,
-      action: 'Qo\'shilish',
+      action: 'Tekshirish',
       color: '#06B6D4',
       taskKey: 'joinChannel',
-    },
-    {
-      id: 'rate_app',
-      title: 'Baholash',
-      description: 'Ilovaga 5 yulduz bering',
-      icon: Star,
-      image: '⭐',
-      reward: { type: 'coins', value: 200, label: '200 Tanga' },
-      maxCount: 1,
-      currentCount: taskCompletion.rateApp ? 1 : 0,
-      completed: taskCompletion.rateApp,
-      action: 'Baholash',
-      color: '#F59E0B',
-      taskKey: 'rateApp',
+      isTimed: false, // Unlimited - but requires verification
     },
   ];
 
@@ -152,6 +98,34 @@ export const MysteryTab = () => {
     if (task.completed) return;
     hapticFeedback('selection');
     setSelectedTask(task);
+    setChannelVerified(false);
+  };
+
+  const verifyChannelSubscription = async () => {
+    if (!user?.id) return false;
+    
+    setCheckingChannel(true);
+    try {
+      // Call edge function to verify Telegram channel subscription
+      const { data, error } = await supabase.functions.invoke('verify-channel-subscription', {
+        body: { telegramId: user.id }
+      });
+      
+      if (error) {
+        console.error('Error verifying channel:', error);
+        setCheckingChannel(false);
+        return false;
+      }
+      
+      const isSubscribed = data?.subscribed === true;
+      setChannelVerified(isSubscribed);
+      setCheckingChannel(false);
+      return isSubscribed;
+    } catch (err) {
+      console.error('Error:', err);
+      setCheckingChannel(false);
+      return false;
+    }
   };
 
   const handleCompleteTask = async () => {
@@ -172,22 +146,29 @@ export const MysteryTab = () => {
         addCoins(selectedTask.reward.value);
       } else if (selectedTask.taskKey === 'inviteFriend') {
         // Open share dialog
-        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent('https://t.me/LotteryBot')}&text=${encodeURIComponent('🎰 Lotereya o\'yiniga qo\'shiling!')}`;
+        const referralCode = user?.referral_code || 'LOTTERY';
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/LotteryBot?start=${referralCode}`)}&text=${encodeURIComponent('🎰 Lotereya o\'yiniga qo\'shiling va tangalar yutib oling!')}`;
         window.open(shareUrl, '_blank');
         completeTask('inviteFriend');
-        addTicket();
-      } else if (selectedTask.taskKey === 'shareStory') {
-        // Story sharing
-        completeTask('shareStory');
         addCoins(selectedTask.reward.value);
       } else if (selectedTask.taskKey === 'joinChannel') {
-        // Open channel
+        // First open channel, then verify
         window.open('https://t.me/LotteryChannel', '_blank');
-        completeTask('joinChannel');
-        for (let i = 0; i < selectedTask.reward.value; i++) addTicket();
-      } else if (selectedTask.taskKey === 'rateApp') {
-        completeTask('rateApp');
-        addCoins(selectedTask.reward.value);
+        
+        // Wait a moment then verify
+        setTimeout(async () => {
+          const verified = await verifyChannelSubscription();
+          if (verified) {
+            completeTask('joinChannel');
+            addCoins(selectedTask.reward.value);
+            hapticFeedback('success');
+          } else {
+            hapticFeedback('error');
+          }
+          setIsLoading(false);
+          setSelectedTask(null);
+        }, 3000);
+        return;
       }
       
       hapticFeedback('success');
@@ -207,24 +188,17 @@ export const MysteryTab = () => {
       <div className="text-center">
         <h1 className="text-xl font-bold text-foreground flex items-center justify-center gap-2">
           <ListTodo className="w-5 h-5 text-primary" />
-          Kunlik Vazifalar
+          Vazifalar
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Keyingi yangilanish: {getNextResetTimeDisplay()} da
+          Vazifalarni bajaring va tanga yutib oling
         </p>
-      </div>
-
-      {/* Timer Card */}
-      <div className="glass-card p-3 flex items-center justify-center gap-2">
-        <Clock className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">Yangilanishga qoldi:</span>
-        <span className="text-sm font-bold text-primary">{formatTimeRemaining(timeRemaining)}</span>
       </div>
 
       {/* Progress Card */}
       <div className="glass-card-elevated p-4 space-y-3">
         <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-foreground">Bugungi jarayon</span>
+          <span className="font-medium text-foreground">Jarayon</span>
           <span className="text-primary font-bold">{completedCount}/{tasks.length}</span>
         </div>
         <div className="h-3 bg-muted rounded-full overflow-hidden">
@@ -273,25 +247,29 @@ export const MysteryTab = () => {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground">{task.title}</span>
                   {task.completed && (
-                    <CheckCircle className="w-4 h-4 text-success" />
+                    <span className="px-2 py-0.5 bg-success/20 text-success text-xs font-semibold rounded-full flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Bajarildi
+                    </span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">{task.description}</p>
                 <div className="flex items-center gap-2 mt-1.5">
                   <div className="flex items-center gap-1">
                     <div className="w-4 h-4 rounded-full bg-amber-100 flex items-center justify-center">
-                      {task.reward.type === 'ticket' ? (
-                        <Ticket className="w-2.5 h-2.5 text-blue-600" />
-                      ) : (
-                        <Coins className="w-2.5 h-2.5 text-amber-600" />
-                      )}
+                      <Coins className="w-2.5 h-2.5 text-amber-600" />
                     </div>
                     <span className="text-xs text-amber-600 font-semibold">{task.reward.label}</span>
                   </div>
+                  {!task.isTimed && !task.completed && (
+                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                      Cheksiz
+                    </span>
+                  )}
                 </div>
                 
                 {/* Progress bar for multi-count tasks */}
-                {task.maxCount > 1 && (
+                {task.maxCount > 1 && !task.completed && (
                   <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-primary rounded-full transition-all"
@@ -344,23 +322,26 @@ export const MysteryTab = () => {
               </div>
 
               <div className="flex items-center justify-center gap-2 py-4">
-                {selectedTask.reward.type === 'ticket' ? (
-                  <Ticket className="w-6 h-6 text-blue-500" />
-                ) : (
-                  <Coins className="w-6 h-6 text-amber-500" />
-                )}
+                <Coins className="w-6 h-6 text-amber-500" />
                 <span className="text-2xl font-bold">{selectedTask.reward.label}</span>
               </div>
 
+              {selectedTask.taskKey === 'joinChannel' && (
+                <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
+                  <p>📢 Kanalga qo'shilib, tekshirish tugmasini bosing.</p>
+                  <p className="text-xs mt-1">Telegram ID orqali obuna tekshiriladi.</p>
+                </div>
+              )}
+
               <button
                 onClick={handleCompleteTask}
-                disabled={isLoading}
+                disabled={isLoading || checkingChannel}
                 className="w-full py-4 rounded-2xl gradient-primary text-white font-bold shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
               >
-                {isLoading ? (
+                {isLoading || checkingChannel ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Yuklanmoqda...
+                    {checkingChannel ? 'Tekshirilmoqda...' : 'Yuklanmoqda...'}
                   </>
                 ) : (
                   <>

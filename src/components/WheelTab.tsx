@@ -3,27 +3,28 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import { hapticFeedback } from '@/lib/telegram';
 import { showAd, loadAdSdk } from '@/lib/adService';
-import { Coins, Ticket, Zap, Crown, Clock, Loader2 } from 'lucide-react';
+import { Coins, Clock, Loader2 } from 'lucide-react';
 
+// Only coins: 5, 10, 30
 const rewards = [
-  { label: '50', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 50, type: 'coins' },
-  { label: '1', sublabel: 'Chipta', icon: Ticket, color: '#3B82F6', bg: 'from-blue-400 to-indigo-500', value: 1, type: 'ticket' },
-  { label: '100', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 100, type: 'coins' },
-  { label: '20', sublabel: 'Energiya', icon: Zap, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 20, type: 'energy' },
-  { label: '200', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 200, type: 'coins' },
-  { label: 'VIP', sublabel: '1 soat', icon: Crown, color: '#A855F7', bg: 'from-purple-400 to-violet-600', value: 1, type: 'premium' },
-  { label: '25', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 25, type: 'coins' },
-  { label: '2', sublabel: 'Chipta', icon: Ticket, color: '#3B82F6', bg: 'from-blue-400 to-indigo-500', value: 2, type: 'ticket' },
+  { label: '10', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
+  { label: '5', sublabel: 'Tanga', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
+  { label: '30', sublabel: 'Tanga', icon: Coins, color: '#EF4444', bg: 'from-red-400 to-rose-500', value: 30, type: 'coins' },
+  { label: '10', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
+  { label: '5', sublabel: 'Tanga', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
+  { label: '30', sublabel: 'Tanga', icon: Coins, color: '#EF4444', bg: 'from-red-400 to-rose-500', value: 30, type: 'coins' },
+  { label: '10', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
+  { label: '5', sublabel: 'Tanga', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
 ];
 
 const segmentColors = [
-  '#FEF3C7', '#DBEAFE', '#FEF3C7', '#D1FAE5',
-  '#FEF3C7', '#F3E8FF', '#FEF3C7', '#DBEAFE'
+  '#FEF3C7', '#D1FAE5', '#FEE2E2', '#FEF3C7',
+  '#D1FAE5', '#FEE2E2', '#FEF3C7', '#D1FAE5'
 ];
 
 const segmentBorders = [
-  '#F59E0B', '#3B82F6', '#F59E0B', '#22C55E',
-  '#F59E0B', '#A855F7', '#F59E0B', '#3B82F6'
+  '#F59E0B', '#22C55E', '#EF4444', '#F59E0B',
+  '#22C55E', '#EF4444', '#F59E0B', '#22C55E'
 ];
 
 const formatTimeRemaining = (ms: number): string => {
@@ -35,14 +36,13 @@ const formatTimeRemaining = (ms: number): string => {
 };
 
 export const WheelTab = () => {
-  const { addCoins, addTicket, recordWheelSpin, canSpinWheel, getWheelResetTime } = useGameStore();
+  const { addCoins, recordWheelSpin, canSpinWheel, getWheelResetTime } = useGameStore();
   const [isSpinning, setIsSpinning] = useState(false);
   const [isLoadingAd, setIsLoadingAd] = useState(false);
   const [result, setResult] = useState<typeof rewards[0] | null>(null);
   const [rotation, setRotation] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [hasAttemptedSpin, setHasAttemptedSpin] = useState(false);
   
   // Ref to prevent double-click
   const isProcessingRef = useRef(false);
@@ -71,14 +71,13 @@ export const WheelTab = () => {
     return () => clearInterval(interval);
   }, [canSpin, getWheelResetTime]);
 
-  const handleCenterClick = async () => {
+  const handleSpin = async () => {
     // Prevent double-click with ref
     if (isProcessingRef.current || isSpinning || isLoadingAd) return;
     isProcessingRef.current = true;
 
     // If can't spin, show the timer
     if (!canSpin) {
-      setHasAttemptedSpin(true);
       hapticFeedback('warning');
       isProcessingRef.current = false;
       return;
@@ -123,17 +122,13 @@ export const WheelTab = () => {
       setResult(rewards[winIndex]);
       setShowCelebration(true);
       recordWheelSpin();
-      setHasAttemptedSpin(true);
       hapticFeedback('success');
       
       // Reset processing ref after spin completes
       isProcessingRef.current = false;
 
-      if (rewards[winIndex].type === 'coins') {
-        addCoins(rewards[winIndex].value);
-      } else if (rewards[winIndex].type === 'ticket') {
-        for (let i = 0; i < rewards[winIndex].value; i++) addTicket();
-      }
+      // Add coins - always coins now
+      addCoins(rewards[winIndex].value);
     }, 5000);
   };
 
@@ -150,7 +145,7 @@ export const WheelTab = () => {
       {/* Wheel Container */}
       <div className="relative flex justify-center items-center py-4">
         {/* Outer decorative ring */}
-        <div className="absolute w-[320px] h-[320px] rounded-full bg-gradient-to-br from-amber-100 via-white to-blue-100 shadow-lg" />
+        <div className="absolute w-[320px] h-[320px] rounded-full bg-gradient-to-br from-amber-100 via-white to-green-100 shadow-lg" />
         
         {/* Decorative dots around wheel */}
         {[...Array(24)].map((_, i) => {
@@ -165,7 +160,7 @@ export const WheelTab = () => {
               style={{
                 left: `calc(50% + ${(x - 50) * 3.2}px)`,
                 top: `calc(50% + ${(y - 50) * 3.2}px)`,
-                backgroundColor: i % 2 === 0 ? '#F59E0B' : '#3B82F6',
+                backgroundColor: i % 3 === 0 ? '#F59E0B' : i % 3 === 1 ? '#22C55E' : '#EF4444',
               }}
               animate={{ 
                 opacity: isSpinning ? [0.4, 1, 0.4] : [0.6, 1, 0.6],
@@ -267,16 +262,18 @@ export const WheelTab = () => {
 
           {/* Center button with prize display */}
           <motion.button
-            onClick={handleCenterClick}
-            disabled={isSpinning || isLoadingAd}
+            onClick={handleSpin}
+            disabled={isSpinning || isLoadingAd || !canSpin}
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full z-10 focus:outline-none"
-            whileHover={!isSpinning && !isLoadingAd ? { scale: 1.08 } : {}}
-            whileTap={!isSpinning && !isLoadingAd ? { scale: 0.95 } : {}}
+            whileHover={!isSpinning && !isLoadingAd && canSpin ? { scale: 1.08 } : {}}
+            whileTap={!isSpinning && !isLoadingAd && canSpin ? { scale: 0.95 } : {}}
           >
             <div className={`w-full h-full rounded-full flex flex-col items-center justify-center border-4 border-white shadow-xl ${
               isLoadingAd 
                 ? 'bg-gray-400' 
-                : 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600'
+                : !canSpin
+                  ? 'bg-gray-400'
+                  : 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600'
             }`}>
               {isLoadingAd ? (
                 <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -294,8 +291,8 @@ export const WheelTab = () => {
                   <span className="text-[8px] text-white/80 block">{result.sublabel}</span>
                 </div>
               ) : (
-                <span className="text-lg font-black text-white drop-shadow-md">
-                  BOSING
+                <span className="text-sm font-black text-white drop-shadow-md text-center leading-tight">
+                  {canSpin ? 'AYLANTIR' : 'KUTISH'}
                 </span>
               )}
             </div>

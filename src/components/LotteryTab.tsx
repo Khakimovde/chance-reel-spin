@@ -25,14 +25,12 @@ export const LotteryTab = () => {
   const { 
     selectedNumbers, 
     pendingParticipation,
-    tickets,
     addCoins, 
     addWinnings, 
     clearSelection, 
     addDrawResult,
     setPendingParticipation,
     updatePersistentStats,
-    useTicket
   } = useGameStore();
   
   const { user, refreshUserData } = useTelegram();
@@ -65,20 +63,19 @@ export const LotteryTab = () => {
     }
 
     const getTargetMs = () => {
-      // Parse the draw slot timestamp
-      const fromSlot = Number.parseInt(pendingParticipation.drawSlot.replace('draw_', ''), 10);
-      if (Number.isFinite(fromSlot) && fromSlot > 0) {
-        // The slot ID is the START of the slot, so the draw happens at the END (next slot)
-        return fromSlot + (15 * 60 * 1000); // Add 15 minutes
-      }
-
-      // Fallback to drawTime if available
+      // The drawTime is the target time when the draw happens
       const anyDrawTime = pendingParticipation.drawTime as unknown;
       if (typeof anyDrawTime === 'string') {
         const ms = new Date(anyDrawTime).getTime();
         return Number.isFinite(ms) ? ms : null;
       }
       if (anyDrawTime instanceof Date) return anyDrawTime.getTime();
+      
+      // Fallback: parse from slot and add 15 min
+      const fromSlot = Number.parseInt(pendingParticipation.drawSlot.replace('draw_', ''), 10);
+      if (Number.isFinite(fromSlot) && fromSlot > 0) {
+        return fromSlot + (15 * 60 * 1000);
+      }
       return null;
     };
 
@@ -109,35 +106,24 @@ export const LotteryTab = () => {
   const joinDraw = async () => {
     if (!isReady) return;
     
-    // Check if user has tickets
-    if (tickets <= 0) {
-      hapticFeedback('error');
-      return;
-    }
-    
     hapticFeedback('medium');
     setIsLoadingAd(true);
     
-    // Show ad before joining
+    // Show ad before joining (replaces ticket system)
     const adShown = await showAd();
     setIsLoadingAd(false);
     
     if (!adShown) return;
 
-    // Use a ticket
-    if (!useTicket()) {
-      hapticFeedback('error');
-      return;
-    }
-
-    // Set pending participation with next draw time
-    const nextDraw = getNextDrawSlot();
-    const currentSlotTime = new Date(nextDraw.getTime() - (15 * 60 * 1000)); // Start of current slot
+    // Get the NEXT draw slot time (not current!)
+    // This is critical: we always assign to the NEXT upcoming draw
+    const nextDrawTime = getNextDrawSlot();
+    const nextDrawSlotId = `draw_${nextDrawTime.getTime()}`;
     
     setPendingParticipation({
       selectedNumbers: [...selectedNumbers],
-      drawSlot: `draw_${currentSlotTime.getTime()}`,
-      drawTime: nextDraw
+      drawSlot: nextDrawSlotId,
+      drawTime: nextDrawTime
     });
     
     setIsWaitingForDraw(true);
@@ -151,12 +137,11 @@ export const LotteryTab = () => {
     setIsWaitingForDraw(false);
     setIsDrawing(true);
     
-    // The draw time is the slot time (when the draw results are calculated)
-    const slotTimestamp = Number.parseInt(pendingParticipation.drawSlot.replace('draw_', ''), 10);
-    const drawTime = new Date(slotTimestamp);
+    // The draw time is the target time from pendingParticipation
+    const drawTime = new Date(drawTimestampMs);
     setActiveDrawTime(drawTime);
     
-    // Generate numbers deterministically based on slot time (same for all users)
+    // Generate numbers deterministically based on draw time (same for all users)
     const draw = generateDrawNumbers(drawTime, MAX_NUMBERS, 42);
     setDrawnNumbers(draw);
   };
@@ -462,19 +447,19 @@ export const LotteryTab = () => {
         )}
       </AnimatePresence>
 
-      {/* Join Draw Button */}
+      {/* Join Draw Button - No tickets required, just watch ad */}
       {!isDrawing && !showResult && !isWaitingForDraw && (
         <div className="space-y-2">
           <motion.button
             onClick={joinDraw}
-            disabled={!isReady || isLoadingAd || tickets <= 0}
+            disabled={!isReady || isLoadingAd}
             className={`w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all text-base ${
-              isReady && !isLoadingAd && tickets > 0
+              isReady && !isLoadingAd
                 ? 'gradient-gold text-white shadow-lg'
                 : 'bg-muted text-muted-foreground'
             }`}
-            whileTap={isReady && !isLoadingAd && tickets > 0 ? { scale: 0.98 } : {}}
-            animate={isReady && !isLoadingAd && tickets > 0 ? { 
+            whileTap={isReady && !isLoadingAd ? { scale: 0.98 } : {}}
+            animate={isReady && !isLoadingAd ? { 
               boxShadow: [
                 '0 4px 20px rgba(245, 158, 11, 0.3)', 
                 '0 4px 30px rgba(245, 158, 11, 0.5)', 
@@ -488,12 +473,10 @@ export const LotteryTab = () => {
                 <Loader2 className="w-5 h-5 animate-spin" />
                 Yuklanmoqda...
               </>
-            ) : tickets <= 0 ? (
-              <>Chipta yo'q</>
             ) : (
               <>
                 <Play className="w-5 h-5" />
-                {isReady ? `O'ynash (${tickets} chipta)` : `Yana ${MAX_NUMBERS - selectedNumbers.length} ta tanlang`}
+                {isReady ? `O'ynash (1 reklama)` : `Yana ${MAX_NUMBERS - selectedNumbers.length} ta tanlang`}
               </>
             )}
           </motion.button>

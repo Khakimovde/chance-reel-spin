@@ -1,1 +1,16 @@
 project_id = "cpghoratejcqdmgkhgzr"
+
+[functions.sync-user]
+verify_jwt = false
+
+[functions.save-game-result]
+verify_jwt = false
+
+[functions.request-withdrawal]
+verify_jwt = false
+
+[functions.telegram-bot]
+verify_jwt = false
+
+[functions.verify-channel-subscription]
+verify_jwt = false
