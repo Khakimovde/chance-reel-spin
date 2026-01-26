@@ -9,6 +9,7 @@ import {
   Play, Users, Bell, Coins, 
   CheckCircle, ChevronRight, Loader2, ListTodo, Clock
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface DailyTask {
   id: string;
@@ -39,12 +40,36 @@ export const MysteryTab = () => {
     addCoins, taskCompletion, completeTask, 
     resetTasksIfNeeded, getTaskResetTime
   } = useGameStore();
-  const { user } = useTelegram();
+  const { user, refreshUserData } = useTelegram();
   const [selectedTask, setSelectedTask] = useState<DailyTask | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [channelVerified, setChannelVerified] = useState(false);
   const [checkingChannel, setCheckingChannel] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
+
+  // Helper function to update coins in backend
+  const updateCoinsInBackend = async (amount: number, statsType?: string) => {
+    if (!user?.id) return false;
+    try {
+      const { error } = await supabase.functions.invoke('update-coins', {
+        body: { 
+          telegramId: user.id, 
+          amount,
+          source: 'task',
+          updateStats: statsType
+        }
+      });
+      if (error) {
+        console.error('Error updating coins:', error);
+        return false;
+      }
+      await refreshUserData();
+      return true;
+    } catch (err) {
+      console.error('Error:', err);
+      return false;
+    }
+  };
 
   // Preload ad SDK and check task reset
   useEffect(() => {
@@ -164,15 +189,34 @@ export const MysteryTab = () => {
           setIsLoading(false);
           return;
         }
-        completeTask('watchAd');
-        addCoins(selectedTask.reward.value);
+        
+        // Update backend first
+        const success = await updateCoinsInBackend(selectedTask.reward.value, 'ads');
+        if (success) {
+          completeTask('watchAd');
+          addCoins(selectedTask.reward.value);
+          toast.success(`+${selectedTask.reward.value} tanga qo'shildi!`);
+        } else {
+          // Fallback to local
+          completeTask('watchAd');
+          addCoins(selectedTask.reward.value);
+        }
       } else if (selectedTask.taskKey === 'inviteFriend') {
         // Open share dialog
         const referralCode = user?.referral_code || 'LOTTERY';
         const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/LotteryBot?start=${referralCode}`)}&text=${encodeURIComponent('🎰 Lotereya o\'yiniga qo\'shiling va tangalar yutib oling!')}`;
         window.open(shareUrl, '_blank');
-        completeTask('inviteFriend');
-        addCoins(selectedTask.reward.value);
+        
+        // Update backend
+        const success = await updateCoinsInBackend(selectedTask.reward.value);
+        if (success) {
+          completeTask('inviteFriend');
+          addCoins(selectedTask.reward.value);
+          toast.success(`+${selectedTask.reward.value} tanga qo'shildi!`);
+        } else {
+          completeTask('inviteFriend');
+          addCoins(selectedTask.reward.value);
+        }
       } else if (selectedTask.taskKey === 'joinChannel') {
         // First open channel, then verify
         window.open('https://t.me/LotteryChannel', '_blank');
@@ -181,11 +225,19 @@ export const MysteryTab = () => {
         setTimeout(async () => {
           const verified = await verifyChannelSubscription();
           if (verified) {
-            completeTask('joinChannel');
-            addCoins(selectedTask.reward.value);
+            const success = await updateCoinsInBackend(selectedTask.reward.value);
+            if (success) {
+              completeTask('joinChannel');
+              addCoins(selectedTask.reward.value);
+              toast.success(`+${selectedTask.reward.value} tanga qo'shildi!`);
+            } else {
+              completeTask('joinChannel');
+              addCoins(selectedTask.reward.value);
+            }
             hapticFeedback('success');
           } else {
             hapticFeedback('error');
+            toast.error('Kanalga obuna topilmadi');
           }
           setIsLoading(false);
           setSelectedTask(null);

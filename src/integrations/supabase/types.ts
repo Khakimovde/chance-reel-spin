@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_stats: {
+        Row: {
+          ads_watched: number
+          created_at: string
+          date: string
+          games_played: number
+          id: string
+          new_users: number
+          wheel_spins: number
+        }
+        Insert: {
+          ads_watched?: number
+          created_at?: string
+          date?: string
+          games_played?: number
+          id?: string
+          new_users?: number
+          wheel_spins?: number
+        }
+        Update: {
+          ads_watched?: number
+          created_at?: string
+          date?: string
+          games_played?: number
+          id?: string
+          new_users?: number
+          wheel_spins?: number
+        }
+        Relationships: []
+      }
       draw_results: {
         Row: {
           created_at: string
@@ -207,6 +237,7 @@ export type Database = {
           created_at: string
           id: string
           processed_at: string | null
+          rejection_reason: string | null
           status: string
           user_id: string
           wallet_address: string | null
@@ -216,6 +247,7 @@ export type Database = {
           created_at?: string
           id?: string
           processed_at?: string | null
+          rejection_reason?: string | null
           status?: string
           user_id: string
           wallet_address?: string | null
@@ -225,6 +257,7 @@ export type Database = {
           created_at?: string
           id?: string
           processed_at?: string | null
+          rejection_reason?: string | null
           status?: string
           user_id?: string
           wallet_address?: string | null

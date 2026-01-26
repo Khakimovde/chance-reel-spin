@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import { hapticFeedback } from '@/lib/telegram';
 import { showAd, loadAdSdk } from '@/lib/adService';
+import { useTelegram } from '@/hooks/useTelegram';
+import { supabase } from '@/integrations/supabase/client';
 import { Coins, Clock, Loader2 } from 'lucide-react';
-
+import { toast } from 'sonner';
 // Only coins: 5, 10, 30
 const rewards = [
   { label: '10', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
@@ -37,6 +39,7 @@ const formatTimeRemaining = (ms: number): string => {
 
 export const WheelTab = () => {
   const { addCoins, recordWheelSpin, canSpinWheel, getWheelResetTime } = useGameStore();
+  const { user, refreshUserData } = useTelegram();
   const [isSpinning, setIsSpinning] = useState(false);
   const [isLoadingAd, setIsLoadingAd] = useState(false);
   const [result, setResult] = useState<typeof rewards[0] | null>(null);
@@ -117,7 +120,7 @@ export const WheelTab = () => {
 
     setRotation(targetRotation);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsSpinning(false);
       setResult(rewards[winIndex]);
       setShowCelebration(true);
@@ -127,8 +130,30 @@ export const WheelTab = () => {
       // Reset processing ref after spin completes
       isProcessingRef.current = false;
 
-      // Add coins - always coins now
-      addCoins(rewards[winIndex].value);
+      // Add coins to backend
+      const reward = rewards[winIndex];
+      try {
+        const { error } = await supabase.functions.invoke('update-coins', {
+          body: { 
+            telegramId: user?.id, 
+            amount: reward.value,
+            source: 'wheel',
+            updateStats: 'wheel'
+          }
+        });
+        
+        if (error) {
+          console.error('Error updating coins:', error);
+          toast.error('Balans yangilashda xatolik');
+        } else {
+          // Refresh user data to get updated balance
+          await refreshUserData();
+          addCoins(reward.value);
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        addCoins(reward.value); // Fallback to local
+      }
     }, 5000);
   };
 

@@ -51,8 +51,10 @@ export const ProfileTab = () => {
 
   const handleWithdraw = async () => {
     const amount = parseInt(withdrawAmount);
-    if (!amount || amount < 1000) {
-      toast.error('Minimal yechish: 1000 tanga');
+    const MIN_WITHDRAWAL = 5000;
+    
+    if (!amount || amount < MIN_WITHDRAWAL) {
+      toast.error(`Minimal yechish: ${MIN_WITHDRAWAL.toLocaleString()} tanga (${(MIN_WITHDRAWAL * 2).toLocaleString()} so'm)`);
       return;
     }
     if (amount > totalWinnings) {
@@ -224,17 +226,17 @@ export const ProfileTab = () => {
 
         <button
           onClick={() => setShowWithdrawModal(true)}
-          disabled={totalWinnings < 1000}
+          disabled={totalWinnings < 5000}
           className="w-full py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <CreditCard className="w-4 h-4" />
           Pul yechish
         </button>
 
-        {totalWinnings < 1000 && (
+        {totalWinnings < 5000 && (
           <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
             <AlertCircle className="w-3 h-3" />
-            Minimal yechish: 1000 tanga
+            Minimal yechish: 5,000 tanga = 10,000 so'm
           </p>
         )}
       </div>

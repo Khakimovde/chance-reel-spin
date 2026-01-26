@@ -43,10 +43,13 @@ interface Withdrawal {
 
 interface Stats {
   totalUsers: number;
+  todayUsers: number;
   totalAdsWatched: number;
-  dailyAdsWatched: number;
+  todayAdsWatched: number;
   totalWheelSpins: number;
+  todayWheelSpins: number;
   totalGamesPlayed: number;
+  todayGamesPlayed: number;
   pendingWithdrawals: number;
   totalWithdrawalsAmount: number;
   totalCoinsInSystem: number;
@@ -66,6 +69,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>('');
   
   // User management
   const [searchTelegramId, setSearchTelegramId] = useState('');
@@ -101,12 +105,25 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         .from('game_history')
         .select('*', { count: 'exact', head: true });
 
+      // Fetch daily stats for today
+      const today = new Date().toISOString().split('T')[0];
+      const { data: dailyStats } = await supabase
+        .from('daily_stats')
+        .select('*')
+        .eq('date', today)
+        .maybeSingle();
+
       // Calculate stats
       const totalAdsWatched = users?.reduce((sum, u) => sum + (u.task_watch_ad || 0), 0) || 0;
       const totalCoinsInSystem = users?.reduce((sum, u) => sum + (u.coins || 0), 0) || 0;
       
       // Count wheel spins (users who have last_wheel_spin set)
       const wheelSpinners = users?.filter(u => u.last_wheel_spin).length || 0;
+      
+      // Today's new users
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayUsers = users?.filter(u => new Date(u.created_at) >= todayStart).length || 0;
       
       // Get users who have user data for withdrawals
       const usersMap = new Map(users?.map(u => [u.id, u]) || []);
@@ -121,10 +138,13 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
 
       setStats({
         totalUsers: users?.length || 0,
+        todayUsers,
         totalAdsWatched,
-        dailyAdsWatched: 0,
+        todayAdsWatched: dailyStats?.ads_watched || 0,
         totalWheelSpins: wheelSpinners,
+        todayWheelSpins: dailyStats?.wheel_spins || 0,
         totalGamesPlayed: gamesCount || 0,
+        todayGamesPlayed: dailyStats?.games_played || 0,
         pendingWithdrawals,
         totalWithdrawalsAmount,
         totalCoinsInSystem,
@@ -139,35 +159,45 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
     }
   };
 
-  const handleWithdrawalAction = async (withdrawalId: string, action: 'approve' | 'reject' | 'pay') => {
+  const handleWithdrawalAction = async (withdrawalId: string, action: 'approve' | 'reject' | 'pay', reason?: string) => {
     setProcessingId(withdrawalId);
     try {
       const newStatus = action === 'approve' ? 'approved' : action === 'pay' ? 'paid' : 'rejected';
       
+      const updateData: any = { 
+        status: newStatus,
+        processed_at: new Date().toISOString()
+      };
+      
+      // Add rejection reason if provided
+      if (action === 'reject' && reason) {
+        updateData.rejection_reason = reason;
+      }
+      
       const { error } = await supabase
         .from('withdrawals')
-        .update({ 
-          status: newStatus,
-          processed_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', withdrawalId);
 
       if (error) throw error;
 
-      // If rejected, return coins to user
+      // If rejected, return coins to user's total_winnings (withdrawable balance)
       if (action === 'reject') {
         const withdrawal = withdrawals.find(w => w.id === withdrawalId);
         if (withdrawal) {
           const { data: userData } = await supabase
             .from('users')
-            .select('coins')
+            .select('coins, total_winnings')
             .eq('id', withdrawal.user_id)
             .maybeSingle();
 
           if (userData) {
             await supabase
               .from('users')
-              .update({ coins: userData.coins + withdrawal.amount })
+              .update({ 
+                coins: userData.coins + withdrawal.amount,
+                total_winnings: userData.total_winnings + withdrawal.amount
+              })
               .eq('id', withdrawal.user_id);
           }
         }
@@ -180,6 +210,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         'So\'rov rad etildi va tangalar qaytarildi'
       );
       
+      setRejectionReason('');
       await fetchData();
     } catch (error) {
       console.error('Error processing withdrawal:', error);
@@ -389,7 +420,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       <Users className="w-5 h-5 text-blue-600" />
                     </div>
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{stats.totalUsers}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-foreground">{stats.totalUsers}</p>
+                    <span className="text-xs text-green-600 font-medium">+{stats.todayUsers} bugun</span>
+                  </div>
                   <p className="text-xs text-muted-foreground">Jami foydalanuvchilar</p>
                 </motion.div>
 
@@ -404,7 +438,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       <Play className="w-5 h-5 text-green-600" />
                     </div>
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{stats.totalAdsWatched}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-foreground">{stats.totalAdsWatched}</p>
+                    <span className="text-xs text-green-600 font-medium">+{stats.todayAdsWatched} bugun</span>
+                  </div>
                   <p className="text-xs text-muted-foreground">Jami reklama ko'rilgan</p>
                 </motion.div>
 
@@ -419,7 +456,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       <TrendingUp className="w-5 h-5 text-purple-600" />
                     </div>
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{stats.totalWheelSpins}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-foreground">{stats.totalWheelSpins}</p>
+                    <span className="text-xs text-green-600 font-medium">+{stats.todayWheelSpins} bugun</span>
+                  </div>
                   <p className="text-xs text-muted-foreground">Wheel aylantirgan</p>
                 </motion.div>
 
@@ -434,7 +474,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       <Eye className="w-5 h-5 text-amber-600" />
                     </div>
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{stats.totalGamesPlayed}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-foreground">{stats.totalGamesPlayed}</p>
+                    <span className="text-xs text-green-600 font-medium">+{stats.todayGamesPlayed} bugun</span>
+                  </div>
                   <p className="text-xs text-muted-foreground">Jami o'yinlar</p>
                 </motion.div>
               </div>
