@@ -56,7 +56,8 @@ export const ProfileTab = () => {
       toast.error(`Minimal yechish: ${MIN_WITHDRAWAL.toLocaleString()} tanga (${(MIN_WITHDRAWAL * 2).toLocaleString()} so'm)`);
       return;
     }
-    if (amount > totalWinnings) {
+    // CHANGED: Check main balance (coins) instead of totalWinnings
+    if (amount > coins) {
       toast.error('Yetarli mablag\' yo\'q');
       return;
     }
@@ -133,23 +134,22 @@ export const ProfileTab = () => {
         <TrustBadge variant="telegram" />
       </motion.div>
 
-      {/* Compact Stats Row - 3 columns: Balans (coins), Referal, Yechish (total_winnings) */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Compact Stats Row - 2 columns: Umumiy Balans (coins) and Referal */}
+      <div className="grid grid-cols-2 gap-2">
         {[
           { icon: Coins, value: coins, label: 'Umumiy Balans', color: 'text-amber-500', bg: 'bg-amber-50' },
           { icon: Users, value: referralCount, label: 'Referal', color: 'text-green-500', bg: 'bg-green-50' },
-          { icon: Wallet, value: totalWinnings, label: 'Yechish balans', color: 'text-purple-500', bg: 'bg-purple-50' },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 + i * 0.03 }}
-            className={`p-2.5 rounded-xl ${stat.bg} text-center`}
+            className={`p-3 rounded-xl ${stat.bg} text-center`}
           >
-            <stat.icon className={`w-4 h-4 ${stat.color} mx-auto mb-1`} />
-            <p className="text-base font-bold text-foreground">{stat.value.toLocaleString()}</p>
-            <p className="text-[9px] text-muted-foreground">{stat.label}</p>
+            <stat.icon className={`w-5 h-5 ${stat.color} mx-auto mb-1`} />
+            <p className="text-xl font-bold text-foreground">{stat.value.toLocaleString()}</p>
+            <p className="text-[10px] text-muted-foreground">{stat.label}</p>
           </motion.div>
         ))}
       </div>
@@ -202,7 +202,7 @@ export const ProfileTab = () => {
         </div>
       </div>
 
-      {/* Withdrawal Section */}
+      {/* Withdrawal Section - Uses main balance (coins) */}
       <div className="glass-card-elevated p-3 space-y-3">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-sm">
@@ -210,28 +210,28 @@ export const ProfileTab = () => {
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-foreground">Pul yechish</h3>
-            <p className="text-[10px] text-muted-foreground">Yutgan pullaringizni yeching</p>
+            <p className="text-[10px] text-muted-foreground">Asosiy balansdan pul yeching</p>
           </div>
         </div>
 
         <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg">
           <div className="flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-purple-500" />
+            <Coins className="w-4 h-4 text-amber-500" />
             <span className="text-xs text-muted-foreground">Mavjud balans:</span>
           </div>
-          <span className="text-sm font-bold text-foreground">{totalWinnings} tanga</span>
+          <span className="text-sm font-bold text-foreground">{coins.toLocaleString()} tanga</span>
         </div>
 
         <button
           onClick={() => setShowWithdrawModal(true)}
-          disabled={totalWinnings < 5000}
+          disabled={coins < 5000}
           className="w-full py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <CreditCard className="w-4 h-4" />
           Pul yechish
         </button>
 
-        {totalWinnings < 5000 && (
+        {coins < 5000 && (
           <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
             <AlertCircle className="w-3 h-3" />
             Minimal yechish: 5,000 tanga = 10,000 so'm
@@ -275,7 +275,7 @@ export const ProfileTab = () => {
                   <Banknote className="w-7 h-7 text-white" />
                 </div>
                 <h3 className="text-lg font-bold">Pul yechish</h3>
-                <p className="text-sm text-muted-foreground">Mavjud: {totalWinnings} tanga</p>
+                <p className="text-sm text-muted-foreground">Mavjud: {coins.toLocaleString()} tanga</p>
               </div>
 
               <div className="space-y-2">

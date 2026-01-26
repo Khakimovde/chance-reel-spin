@@ -111,11 +111,11 @@ export const LotteryBallMachine = ({
     };
   }, [isSpinning, drawnBalls]);
 
-  // Draw balls one by one
+  // Draw balls one by one - FASTER timing
   useEffect(() => {
     if (drawnBalls.length >= maxNumbers) {
       setIsSpinning(false);
-      setTimeout(onComplete, 500);
+      setTimeout(onComplete, 300);
       return;
     }
 
@@ -129,8 +129,8 @@ export const LotteryBallMachine = ({
         setDrawnBalls(prev => [...prev, nextNumber]);
         onBallDrawn(nextNumber, drawnBalls.length);
         setExitingBall(null);
-      }, 800);
-    }, drawnBalls.length === 0 ? 1500 : 1200);
+      }, 400); // Faster exit animation
+    }, drawnBalls.length === 0 ? 800 : 600); // Faster initial delay and between balls
 
     return () => clearTimeout(timer);
   }, [drawnBalls, targetNumbers, maxNumbers, onBallDrawn, onComplete]);

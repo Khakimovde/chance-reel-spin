@@ -60,8 +60,8 @@ serve(async (req) => {
       });
     }
     
-    // Check balance
-    if (user.total_winnings < amount) {
+    // CHANGED: Check main balance (coins) instead of total_winnings
+    if (user.coins < amount) {
       return new Response(JSON.stringify({ error: "Insufficient balance" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -88,10 +88,10 @@ serve(async (req) => {
       });
     }
     
-    // Deduct from user's total winnings
+    // CHANGED: Deduct from main balance (coins) instead of total_winnings
     await supabase
       .from("users")
-      .update({ total_winnings: user.total_winnings - amount })
+      .update({ coins: user.coins - amount })
       .eq("id", user.id);
     
     // Notify admin
