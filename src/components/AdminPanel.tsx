@@ -70,6 +70,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>('');
+  const [showRejectModal, setShowRejectModal] = useState<string | null>(null);
   
   // User management
   const [searchTelegramId, setSearchTelegramId] = useState('');
@@ -78,12 +79,14 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [isSearching, setIsSearching] = useState(false);
   const [isUpdatingCoins, setIsUpdatingCoins] = useState(false);
 
+  // Auto-refresh interval
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
-    setIsLoading(true);
     try {
       // Fetch all users for stats
       const { data: users, error: usersError } = await supabase
@@ -105,20 +108,26 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         .from('game_history')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch daily stats for today
-      const today = new Date().toISOString().split('T')[0];
-      const { data: dailyStats } = await supabase
+      // Fetch ALL daily stats and sum them up
+      const { data: allDailyStats } = await supabase
         .from('daily_stats')
-        .select('*')
-        .eq('date', today)
-        .maybeSingle();
-
-      // Calculate stats
-      const totalAdsWatched = users?.reduce((sum, u) => sum + (u.task_watch_ad || 0), 0) || 0;
-      const totalCoinsInSystem = users?.reduce((sum, u) => sum + (u.coins || 0), 0) || 0;
+        .select('*');
       
-      // Count wheel spins (users who have last_wheel_spin set)
-      const wheelSpinners = users?.filter(u => u.last_wheel_spin).length || 0;
+      // Calculate total ads from all daily stats
+      const totalAdsFromStats = allDailyStats?.reduce((sum, d) => sum + (d.ads_watched || 0), 0) || 0;
+      const totalWheelFromStats = allDailyStats?.reduce((sum, d) => sum + (d.wheel_spins || 0), 0) || 0;
+      
+      // Fetch today's stats
+      const today = new Date().toISOString().split('T')[0];
+      const todayStats = allDailyStats?.find(d => d.date === today);
+      
+      // Calculate total ads watched from user task_watch_ad as well
+      const totalAdsFromUsers = users?.reduce((sum, u) => sum + (u.task_watch_ad || 0), 0) || 0;
+      
+      // Use the higher value (combining both sources)
+      const totalAdsWatched = Math.max(totalAdsFromStats, totalAdsFromUsers);
+      
+      const totalCoinsInSystem = users?.reduce((sum, u) => sum + (u.coins || 0), 0) || 0;
       
       // Today's new users
       const todayStart = new Date();
@@ -140,11 +149,11 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         totalUsers: users?.length || 0,
         todayUsers,
         totalAdsWatched,
-        todayAdsWatched: dailyStats?.ads_watched || 0,
-        totalWheelSpins: wheelSpinners,
-        todayWheelSpins: dailyStats?.wheel_spins || 0,
+        todayAdsWatched: todayStats?.ads_watched || 0,
+        totalWheelSpins: totalWheelFromStats,
+        todayWheelSpins: todayStats?.wheel_spins || 0,
         totalGamesPlayed: gamesCount || 0,
-        todayGamesPlayed: dailyStats?.games_played || 0,
+        todayGamesPlayed: todayStats?.games_played || 0,
         pendingWithdrawals,
         totalWithdrawalsAmount,
         totalCoinsInSystem,
@@ -153,7 +162,6 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       setWithdrawals(enrichedWithdrawals);
     } catch (error) {
       console.error('Error fetching admin data:', error);
-      toast.error('Ma\'lumotlarni yuklashda xatolik');
     } finally {
       setIsLoading(false);
     }
@@ -181,7 +189,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
 
       if (error) throw error;
 
-      // If rejected, return coins to user's total_winnings (withdrawable balance)
+      // If rejected, return coins to user's balance (both coins and total_winnings)
       if (action === 'reject') {
         const withdrawal = withdrawals.find(w => w.id === withdrawalId);
         if (withdrawal) {
@@ -211,6 +219,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       );
       
       setRejectionReason('');
+      setShowRejectModal(null);
       await fetchData();
     } catch (error) {
       console.error('Error processing withdrawal:', error);
@@ -218,6 +227,11 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const openRejectModal = (withdrawalId: string) => {
+    setShowRejectModal(withdrawalId);
+    setRejectionReason('');
   };
 
   const searchUserByTelegramId = async () => {
@@ -610,7 +624,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                           )}
                         </button>
                         <button
-                          onClick={() => handleWithdrawalAction(withdrawal.id, 'reject')}
+                          onClick={() => openRejectModal(withdrawal.id)}
                           disabled={processingId === withdrawal.id}
                           className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
@@ -799,6 +813,60 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Rejection Reason Modal */}
+      <AnimatePresence>
+        {showRejectModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowRejectModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card w-full max-w-sm rounded-2xl p-5 space-y-4"
+            >
+              <h3 className="text-lg font-bold text-foreground">So'rovni rad etish</h3>
+              <div>
+                <label className="text-sm font-medium text-foreground block mb-2">Rad etish sababi</label>
+                <textarea
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Sababni kiriting..."
+                  className="w-full p-3 rounded-lg border border-border bg-background text-sm min-h-[100px]"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowRejectModal(null)}
+                  className="flex-1 py-3 rounded-lg bg-muted text-muted-foreground font-medium"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  onClick={() => handleWithdrawalAction(showRejectModal, 'reject', rejectionReason)}
+                  disabled={processingId === showRejectModal}
+                  className="flex-1 py-3 rounded-lg bg-red-500 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {processingId === showRejectModal ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4" />
+                      Rad etish
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

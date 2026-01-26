@@ -19,6 +19,8 @@ serve(async (req) => {
   try {
     const { telegramId, amount, source, updateStats } = await req.json();
     
+    console.log(`Update coins request: telegramId=${telegramId}, amount=${amount}, source=${source}`);
+    
     if (!telegramId || amount === undefined) {
       return new Response(JSON.stringify({ error: "Missing telegramId or amount" }), {
         status: 400,
@@ -34,21 +36,31 @@ serve(async (req) => {
       .maybeSingle();
     
     if (userError || !user) {
+      console.error("User not found:", userError);
       return new Response(JSON.stringify({ error: "User not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     
+    // Calculate new values
     const newCoins = Math.max(0, user.coins + amount);
-    const newTotalWinnings = source === 'lottery' ? user.total_winnings + amount : user.total_winnings;
     
-    // Update user coins
+    // For lottery winnings or wheel or task rewards, also add to total_winnings (withdrawable balance)
+    const isWinningSource = source === 'lottery' || source === 'wheel' || source === 'task';
+    const newTotalWinnings = isWinningSource && amount > 0 
+      ? user.total_winnings + amount 
+      : user.total_winnings;
+    
+    console.log(`Updating: oldCoins=${user.coins}, newCoins=${newCoins}, oldWinnings=${user.total_winnings}, newWinnings=${newTotalWinnings}`);
+    
+    // Update user coins immediately
     const { error: updateError } = await supabase
       .from("users")
       .update({ 
         coins: newCoins,
         total_winnings: newTotalWinnings,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
     
@@ -60,11 +72,11 @@ serve(async (req) => {
       });
     }
     
-    // Update daily stats if needed
+    // Update daily stats if needed - do this async without blocking
     if (updateStats) {
       const today = new Date().toISOString().split('T')[0];
       
-      // Try to insert or update daily stats
+      // Try to get or create daily stats
       const { data: existingStats } = await supabase
         .from("daily_stats")
         .select("*")
@@ -92,6 +104,8 @@ serve(async (req) => {
           .insert(newStats);
       }
     }
+    
+    console.log(`Success: newCoins=${newCoins}, newTotalWinnings=${newTotalWinnings}`);
     
     return new Response(JSON.stringify({ 
       success: true,
