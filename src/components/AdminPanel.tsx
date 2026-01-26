@@ -14,12 +14,12 @@ import {
   TrendingUp,
   Clock,
   Banknote,
-  Settings,
   Bell,
   Plus,
   Minus,
   Search,
-  Coins
+  Coins,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { hapticFeedback } from '@/lib/telegram';
@@ -39,6 +39,13 @@ interface Withdrawal {
     telegram_id: number;
     coins: number;
   };
+}
+
+interface RequiredChannel {
+  id: string;
+  channel_username: string;
+  reward_amount: number;
+  is_active: boolean;
 }
 
 interface Stats {
@@ -78,13 +85,91 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [coinAmount, setCoinAmount] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isUpdatingCoins, setIsUpdatingCoins] = useState(false);
+  
+  // Channel management
+  const [channels, setChannels] = useState<RequiredChannel[]>([]);
+  const [newChannelUsername, setNewChannelUsername] = useState('');
+  const [newChannelReward, setNewChannelReward] = useState('200');
+  const [isAddingChannel, setIsAddingChannel] = useState(false);
 
   // Auto-refresh interval
   useEffect(() => {
     fetchData();
+    fetchChannels();
     const interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
   }, []);
+
+  const fetchChannels = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('required_channels')
+        .select('*')
+        .order('created_at', { ascending: true });
+      
+      if (!error && data) {
+        setChannels(data);
+      }
+    } catch (error) {
+      console.error('Error fetching channels:', error);
+    }
+  };
+
+  const addChannel = async () => {
+    if (!newChannelUsername.trim()) {
+      toast.error('Kanal username kiriting');
+      return;
+    }
+
+    const username = newChannelUsername.startsWith('@') ? newChannelUsername : `@${newChannelUsername}`;
+    const reward = parseInt(newChannelReward) || 200;
+
+    setIsAddingChannel(true);
+    try {
+      const { error } = await supabase
+        .from('required_channels')
+        .insert({
+          channel_username: username,
+          reward_amount: reward,
+          is_active: true,
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast.error('Bu kanal allaqachon mavjud');
+        } else {
+          throw error;
+        }
+      } else {
+        toast.success('Kanal qo\'shildi');
+        setNewChannelUsername('');
+        setNewChannelReward('200');
+        await fetchChannels();
+      }
+    } catch (error) {
+      console.error('Error adding channel:', error);
+      toast.error('Kanal qo\'shishda xatolik');
+    } finally {
+      setIsAddingChannel(false);
+    }
+  };
+
+  const deleteChannel = async (channelId: string) => {
+    try {
+      const { error } = await supabase
+        .from('required_channels')
+        .delete()
+        .eq('id', channelId);
+
+      if (error) throw error;
+
+      toast.success('Kanal o\'chirildi');
+      await fetchChannels();
+    } catch (error) {
+      console.error('Error deleting channel:', error);
+      toast.error('Kanal o\'chirishda xatolik');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -121,12 +206,6 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       const today = new Date().toISOString().split('T')[0];
       const todayStats = allDailyStats?.find(d => d.date === today);
       
-      // Calculate total ads watched from user task_watch_ad as well
-      const totalAdsFromUsers = users?.reduce((sum, u) => sum + (u.task_watch_ad || 0), 0) || 0;
-      
-      // Use the higher value (combining both sources)
-      const totalAdsWatched = Math.max(totalAdsFromStats, totalAdsFromUsers);
-      
       const totalCoinsInSystem = users?.reduce((sum, u) => sum + (u.coins || 0), 0) || 0;
       
       // Today's new users
@@ -148,7 +227,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       setStats({
         totalUsers: users?.length || 0,
         todayUsers,
-        totalAdsWatched,
+        totalAdsWatched: totalAdsFromStats,
         todayAdsWatched: todayStats?.ads_watched || 0,
         totalWheelSpins: totalWheelFromStats,
         todayWheelSpins: todayStats?.wheel_spins || 0,
@@ -189,13 +268,13 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
 
       if (error) throw error;
 
-      // If rejected, return coins to user's balance (both coins and total_winnings)
+      // If rejected, return coins to user's main balance (coins)
       if (action === 'reject') {
         const withdrawal = withdrawals.find(w => w.id === withdrawalId);
         if (withdrawal) {
           const { data: userData } = await supabase
             .from('users')
-            .select('coins, total_winnings')
+            .select('coins')
             .eq('id', withdrawal.user_id)
             .maybeSingle();
 
@@ -203,8 +282,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
             await supabase
               .from('users')
               .update({ 
-                coins: userData.coins + withdrawal.amount,
-                total_winnings: userData.total_winnings + withdrawal.amount
+                coins: userData.coins + withdrawal.amount
               })
               .eq('id', withdrawal.user_id);
           }
@@ -665,39 +743,81 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-4"
             >
+              {/* Add New Channel */}
               <div className="glass-card-elevated p-4 space-y-4">
                 <h3 className="font-semibold text-foreground flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-cyan-500" />
-                  Majburiy kanal sozlamalari
+                  <Plus className="w-5 h-5 text-green-500" />
+                  Yangi kanal qo'shish
                 </h3>
                 
-                <div className="p-4 bg-cyan-50/50 rounded-xl space-y-3">
+                <div className="space-y-3">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Kanal username</label>
                     <input
                       type="text"
-                      placeholder="@LotteryChannel"
+                      value={newChannelUsername}
+                      onChange={(e) => setNewChannelUsername(e.target.value)}
+                      placeholder="@ChannelUsername"
                       className="w-full p-3 rounded-lg border border-border bg-background text-sm"
-                      defaultValue="@LotteryChannel"
                     />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Obuna uchun tanga mukofoti</label>
                     <input
                       type="number"
+                      value={newChannelReward}
+                      onChange={(e) => setNewChannelReward(e.target.value)}
                       placeholder="200"
                       className="w-full p-3 rounded-lg border border-border bg-background text-sm"
-                      defaultValue="200"
                     />
                   </div>
-                  <button className="w-full py-3 rounded-xl bg-cyan-500 text-white font-semibold">
-                    Saqlash
+                  <button 
+                    onClick={addChannel}
+                    disabled={isAddingChannel || !newChannelUsername.trim()}
+                    className="w-full py-3 rounded-xl bg-green-500 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isAddingChannel ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Kanal qo'shish
+                      </>
+                    )}
                   </button>
                 </div>
+              </div>
+
+              {/* Existing Channels List */}
+              <div className="glass-card-elevated p-4 space-y-4">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-cyan-500" />
+                  Mavjud kanallar ({channels.length})
+                </h3>
                 
-                <p className="text-xs text-muted-foreground">
-                  ⚠️ Kanal sozlamalarini o'zgartirish uchun kod yangilash kerak bo'ladi.
-                </p>
+                {channels.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Bell className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                    <p>Hozircha kanallar yo'q</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {channels.map((channel) => (
+                      <div key={channel.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
+                        <div>
+                          <p className="font-medium text-foreground">{channel.channel_username}</p>
+                          <p className="text-xs text-muted-foreground">Mukofot: {channel.reward_amount} tanga</p>
+                        </div>
+                        <button
+                          onClick={() => deleteChannel(channel.id)}
+                          className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

@@ -115,6 +115,22 @@ export const LotteryTab = () => {
     
     if (!adShown) return;
 
+    // Track ad view in statistics
+    if (user?.id) {
+      try {
+        await supabase.functions.invoke('update-coins', {
+          body: { 
+            telegramId: user.id, 
+            amount: 0, // No coins added, just tracking ad
+            source: 'lottery',
+            updateStats: 'games'
+          }
+        });
+      } catch (error) {
+        console.error('Error tracking ad:', error);
+      }
+    }
+
     // Get the NEXT draw slot time (not current!)
     // This is critical: we always assign to the NEXT upcoming draw
     const nextDrawTime = getNextDrawSlot();

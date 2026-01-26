@@ -151,6 +151,33 @@ export type Database = {
           },
         ]
       }
+      required_channels: {
+        Row: {
+          channel_username: string
+          created_at: string
+          id: string
+          is_active: boolean
+          reward_amount: number
+          updated_at: string
+        }
+        Insert: {
+          channel_username: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          reward_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          channel_username?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          reward_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           coins: number

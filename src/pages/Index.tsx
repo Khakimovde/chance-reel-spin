@@ -16,7 +16,7 @@ const ADMIN_TELEGRAM_ID = 5326022510;
 const Index = () => {
   const [activeTab, setActiveTab] = useState('lottery');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const { user } = useTelegram();
+  const { user, refreshUserData } = useTelegram();
   
   // Check if current user is admin
   const telegramUser = getTelegramUser();
@@ -26,7 +26,15 @@ const Index = () => {
     initTelegramApp();
   }, []);
 
-  // Use user's backend-synced data
+  // Auto-refresh user data every 3 seconds for instant balance updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshUserData();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [refreshUserData]);
+
+  // Use user's backend-synced data - updates in real-time now
   const coins = user?.coins ?? 0;
 
   const renderTab = () => {
@@ -95,7 +103,11 @@ const Index = () => {
                 </motion.button>
               )}
               <motion.div 
+                key={coins} // Force re-render on coins change
                 className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 px-3 py-1.5 rounded-full"
+                initial={{ scale: 1.05 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.2 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >

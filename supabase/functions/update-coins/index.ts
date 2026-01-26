@@ -46,7 +46,7 @@ serve(async (req) => {
     // Calculate new values
     const newCoins = Math.max(0, user.coins + amount);
     
-    // For lottery winnings or wheel or task rewards, also add to total_winnings (withdrawable balance)
+    // For lottery winnings, wheel, or task rewards, also add to total_winnings (withdrawable balance)
     const isWinningSource = source === 'lottery' || source === 'wheel' || source === 'task';
     const newTotalWinnings = isWinningSource && amount > 0 
       ? user.total_winnings + amount 
@@ -72,36 +72,45 @@ serve(async (req) => {
       });
     }
     
-    // Update daily stats if needed - do this async without blocking
-    if (updateStats) {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Try to get or create daily stats
-      const { data: existingStats } = await supabase
-        .from("daily_stats")
-        .select("*")
-        .eq("date", today)
-        .maybeSingle();
-      
+    // Update daily stats - track ALL ads (from any source)
+    // Do this async without blocking
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Try to get or create daily stats
+    const { data: existingStats } = await supabase
+      .from("daily_stats")
+      .select("*")
+      .eq("date", today)
+      .maybeSingle();
+    
+    // Determine what to update
+    const updateField: Record<string, number> = {};
+    
+    // Track ads based on updateStats param OR source
+    if (updateStats === 'ads' || source === 'task') {
+      updateField.ads_watched = (existingStats?.ads_watched || 0) + 1;
+    }
+    if (updateStats === 'wheel' || source === 'wheel') {
+      updateField.wheel_spins = (existingStats?.wheel_spins || 0) + 1;
+      // Wheel also counts as an ad view
+      updateField.ads_watched = (existingStats?.ads_watched || 0) + 1;
+    }
+    if (updateStats === 'games' || source === 'lottery') {
+      updateField.games_played = (existingStats?.games_played || 0) + 1;
+      // Lottery also counts as an ad view
+      updateField.ads_watched = (existingStats?.ads_watched || 0) + 1;
+    }
+    
+    if (Object.keys(updateField).length > 0) {
       if (existingStats) {
-        const updateField: Record<string, number> = {};
-        if (updateStats === 'ads') updateField.ads_watched = existingStats.ads_watched + 1;
-        if (updateStats === 'wheel') updateField.wheel_spins = existingStats.wheel_spins + 1;
-        if (updateStats === 'games') updateField.games_played = existingStats.games_played + 1;
-        
         await supabase
           .from("daily_stats")
           .update(updateField)
           .eq("id", existingStats.id);
       } else {
-        const newStats: Record<string, number | string> = { date: today };
-        if (updateStats === 'ads') newStats.ads_watched = 1;
-        if (updateStats === 'wheel') newStats.wheel_spins = 1;
-        if (updateStats === 'games') newStats.games_played = 1;
-        
         await supabase
           .from("daily_stats")
-          .insert(newStats);
+          .insert({ date: today, ...updateField });
       }
     }
     
