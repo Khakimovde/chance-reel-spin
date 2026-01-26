@@ -6,7 +6,6 @@ import { WithdrawalHistory } from './WithdrawalHistory';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Coins, 
-  Ticket,
   Copy, 
   Users, 
   Gift,
@@ -28,11 +27,11 @@ export const ProfileTab = () => {
   const [walletAddress, setWalletAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Use user's backend data
-  const coins = user?.coins ?? 0;
+  // Use ONLY backend data - coins is main balance, total_winnings is withdrawable
+  const coins = user?.coins ?? 0;  // Asosiy umumiy balans
   const tickets = user?.tickets ?? 0;
   const referralCount = user?.referral_count ?? 0;
-  const totalWinnings = user?.total_winnings ?? 0;
+  const totalWinnings = user?.total_winnings ?? 0;  // Yechib olish mumkin bo'lgan balans
 
   const referralLink = `https://t.me/Luckygame_robot?start=ref_${user?.id || ''}`;
 
@@ -134,23 +133,22 @@ export const ProfileTab = () => {
         <TrustBadge variant="telegram" />
       </motion.div>
 
-      {/* Compact Stats Row */}
-      <div className="grid grid-cols-4 gap-2">
+      {/* Compact Stats Row - 3 columns: Balans (coins), Referal, Yechish (total_winnings) */}
+      <div className="grid grid-cols-3 gap-2">
         {[
-          { icon: Coins, value: coins, label: 'Tanga', color: 'text-amber-500', bg: 'bg-amber-50' },
-          { icon: Ticket, value: tickets, label: 'Chipta', color: 'text-blue-500', bg: 'bg-blue-50' },
+          { icon: Coins, value: coins, label: 'Umumiy Balans', color: 'text-amber-500', bg: 'bg-amber-50' },
           { icon: Users, value: referralCount, label: 'Referal', color: 'text-green-500', bg: 'bg-green-50' },
-          { icon: Wallet, value: totalWinnings, label: 'Yutgan', color: 'text-purple-500', bg: 'bg-purple-50' },
+          { icon: Wallet, value: totalWinnings, label: 'Yechish balans', color: 'text-purple-500', bg: 'bg-purple-50' },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 + i * 0.03 }}
-            className={`p-2 rounded-xl ${stat.bg} text-center`}
+            className={`p-2.5 rounded-xl ${stat.bg} text-center`}
           >
             <stat.icon className={`w-4 h-4 ${stat.color} mx-auto mb-1`} />
-            <p className="text-sm font-bold text-foreground">{stat.value}</p>
+            <p className="text-base font-bold text-foreground">{stat.value.toLocaleString()}</p>
             <p className="text-[9px] text-muted-foreground">{stat.label}</p>
           </motion.div>
         ))}
