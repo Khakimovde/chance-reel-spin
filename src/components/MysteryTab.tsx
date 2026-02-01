@@ -80,7 +80,7 @@ export const MysteryTab = () => {
     }
   };
 
-  // Fetch required channels from database
+  // Fetch required channels and check already claimed rewards
   const fetchRequiredChannels = async () => {
     try {
       const { data, error } = await supabase
@@ -92,7 +92,7 @@ export const MysteryTab = () => {
       if (!error && data) {
         setRequiredChannels(data);
         
-        // Check which channels user has already subscribed to
+        // Check which channels user has already claimed rewards for
         if (user?.id) {
           const { data: userData } = await supabase
             .from('users')
@@ -101,8 +101,19 @@ export const MysteryTab = () => {
             .maybeSingle();
           
           if (userData) {
-            // For now, we'll check each channel on demand
-            // In production, you might want to store this in a separate table
+            // Fetch already claimed channel rewards
+            const { data: claimedRewards } = await supabase
+              .from('user_channel_rewards')
+              .select('channel_id')
+              .eq('user_id', userData.id);
+            
+            if (claimedRewards) {
+              const claimedMap: Record<string, boolean> = {};
+              claimedRewards.forEach(r => {
+                claimedMap[r.channel_id] = true;
+              });
+              setChannelSubscriptions(claimedMap);
+            }
           }
         }
       }
@@ -299,9 +310,54 @@ export const MysteryTab = () => {
     
     setIsLoading(true);
     
+    // First check if already claimed
+    const { data: userData } = await supabase
+      .from('users')
+      .select('id')
+      .eq('telegram_id', user.id)
+      .maybeSingle();
+    
+    if (userData) {
+      const { data: existingClaim } = await supabase
+        .from('user_channel_rewards')
+        .select('id')
+        .eq('user_id', userData.id)
+        .eq('channel_id', selectedChannelTask.id)
+        .maybeSingle();
+      
+      if (existingClaim) {
+        toast.error('Siz bu kanal uchun mukofotni allaqachon olgansiz!');
+        setChannelSubscriptions(prev => ({ ...prev, [selectedChannelTask.id]: true }));
+        setIsLoading(false);
+        setSelectedChannelTask(null);
+        hapticFeedback('error');
+        return;
+      }
+    }
+    
     const result = await verifyChannelSubscription(selectedChannelTask.channel_username);
     
-    if (result.subscribed) {
+    if (result.subscribed && userData) {
+      // Record the claim first
+      const { error: claimError } = await supabase
+        .from('user_channel_rewards')
+        .insert({
+          user_id: userData.id,
+          channel_id: selectedChannelTask.id
+        });
+      
+      if (claimError) {
+        if (claimError.code === '23505') { // Duplicate key
+          toast.error('Siz bu kanal uchun mukofotni allaqachon olgansiz!');
+          setChannelSubscriptions(prev => ({ ...prev, [selectedChannelTask.id]: true }));
+        } else {
+          toast.error('Xatolik yuz berdi');
+        }
+        setIsLoading(false);
+        setSelectedChannelTask(null);
+        return;
+      }
+      
       const success = await updateCoinsInBackend(selectedChannelTask.reward_amount);
       if (success) {
         addCoins(selectedChannelTask.reward_amount);
@@ -311,7 +367,6 @@ export const MysteryTab = () => {
       }
     } else {
       hapticFeedback('error');
-      // Show specific error message from backend
       toast.error(result.error || 'Kanalga obuna topilmadi. Avval kanalga obuna bo\'ling!');
     }
     

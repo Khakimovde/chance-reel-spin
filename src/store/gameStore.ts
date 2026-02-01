@@ -63,6 +63,7 @@ interface GameState {
   updatePersistentStats: (participated: boolean, won: boolean, earned: number) => void;
   setPendingParticipation: (participation: PendingParticipation | null) => void;
   syncWithBackend: (coins: number, tickets: number, referralCount: number, totalWinnings: number) => void;
+  syncTaskInviteFriend: (count: number) => void;
 }
 
 const DRAW_INTERVAL = 15 * 60 * 1000; // 15 minutes
@@ -238,6 +239,12 @@ export const useGameStore = create<GameState>()(
         referralCount,
         totalWinnings,
       }),
+      syncTaskInviteFriend: (count) => set((state) => ({
+        taskCompletion: {
+          ...state.taskCompletion,
+          inviteFriend: Math.min(count, 2), // Max 2 for task completion
+        }
+      })),
     }),
     {
       name: getStorageKey(),
