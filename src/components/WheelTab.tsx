@@ -296,15 +296,19 @@ export const WheelTab = () => {
             <div className={`w-full h-full rounded-full flex flex-col items-center justify-center border-4 border-white shadow-xl ${
               isLoadingAd 
                 ? 'bg-gray-400' 
-                : !canSpin
-                  ? 'bg-gray-400'
-                  : 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600'
+                : isSpinning
+                  ? 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600'
+                  : !canSpin
+                    ? 'bg-gray-400'
+                    : 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600'
             }`}>
               {isLoadingAd ? (
                 <Loader2 className="w-6 h-6 text-white animate-spin" />
+              ) : isSpinning ? (
+                null
               ) : (
                 <span className="text-xs font-black text-white drop-shadow-md text-center leading-tight">
-                  {isSpinning ? '' : canSpin ? 'BOSISH' : 'KUTISH'}
+                  {canSpin ? 'BOSISH' : 'KUTISH'}
                 </span>
               )}
             </div>

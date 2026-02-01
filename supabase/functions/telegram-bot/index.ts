@@ -56,24 +56,31 @@ async function handleStart(message: any) {
   const username = message.from.username || "";
   const photoUrl = message.from.photo_url || "";
   
+  console.log(`[START] User ${telegramId} (${firstName}) starting bot`);
+  
   // Check for referral
   const text = message.text || "";
   let referredBy: string | null = null;
   let referrerTelegramId: number | null = null;
   
   if (text.includes("ref_")) {
-    const refId = text.split("ref_")[1];
+    const refId = text.split("ref_")[1]?.split(" ")[0];
+    console.log(`[REFERRAL] Found referral code: ref_${refId}`);
+    
     if (refId && refId !== String(telegramId)) {
       // Find referrer by telegram_id
       const { data: referrer } = await supabase
         .from("users")
-        .select("id, telegram_id, coins, referral_count")
+        .select("id, telegram_id, coins, referral_count, task_invite_friend")
         .eq("telegram_id", parseInt(refId))
         .maybeSingle();
       
       if (referrer) {
+        console.log(`[REFERRAL] Found referrer: ${referrer.id} (telegram_id: ${referrer.telegram_id})`);
         referredBy = referrer.id;
         referrerTelegramId = referrer.telegram_id;
+      } else {
+        console.log(`[REFERRAL] Referrer with telegram_id ${refId} not found`);
       }
     }
   }
@@ -86,6 +93,7 @@ async function handleStart(message: any) {
     .maybeSingle();
   
   if (existingUser) {
+    console.log(`[START] User ${telegramId} already exists, sending welcome back message`);
     await sendTelegramMessage(
       telegramId,
       `🎰 <b>Salom, ${firstName}!</b>\n\nSiz allaqachon ro'yxatdan o'tgansiz.\n\n💰 Balans: ${existingUser.coins} tanga\n🎫 Chiptalar: ${existingUser.tickets}\n\nIlovani ochish uchun quyidagi tugmani bosing:`
@@ -94,6 +102,7 @@ async function handleStart(message: any) {
   }
   
   // Create new user
+  console.log(`[START] Creating new user ${telegramId}`);
   const { data: newUser, error } = await supabase
     .from("users")
     .insert({
@@ -110,18 +119,28 @@ async function handleStart(message: any) {
     .single();
   
   if (error) {
-    console.error("Error creating user:", error);
+    console.error("[START] Error creating user:", error);
     await sendTelegramMessage(telegramId, "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring.");
     return;
   }
   
-  // If referred, reward the referrer with 50 coins (profile referral)
+  console.log(`[START] User ${telegramId} created successfully with id: ${newUser.id}`);
+  
+  // If referred, reward the referrer
   if (referredBy && referrerTelegramId) {
+    console.log(`[REFERRAL] Processing referral reward for referrer ${referredBy}`);
+    
     // Create referral record
-    await supabase.from("referrals").insert({
+    const { error: refError } = await supabase.from("referrals").insert({
       referrer_id: referredBy,
       referred_id: newUser.id,
     });
+    
+    if (refError) {
+      console.error("[REFERRAL] Error creating referral record:", refError);
+    } else {
+      console.log("[REFERRAL] Referral record created");
+    }
     
     // Get referrer's current data
     const { data: referrerData } = await supabase
@@ -131,41 +150,46 @@ async function handleStart(message: any) {
       .single();
     
     if (referrerData) {
-      // Base referral reward: 50 coins
-      let rewardAmount = 50;
-      let taskCompleted = false;
-      
-      // Check if this counts towards task completion (first 2 referrals per period)
+      // Profile referral reward: 50 coins (unlimited)
+      const profileReward = 50;
+      const newReferralCount = referrerData.referral_count + 1;
       const newTaskCount = referrerData.task_invite_friend + 1;
       
-      // Update referrer: add coins and increment counts
-      await supabase
+      console.log(`[REFERRAL] Referrer current stats - coins: ${referrerData.coins}, referral_count: ${referrerData.referral_count}, task_invite_friend: ${referrerData.task_invite_friend}`);
+      
+      // Calculate total reward
+      let totalReward = profileReward; // Always give 50 for profile referral
+      let taskBonusGiven = false;
+      
+      // Check if task bonus should be given (when reaching exactly 2 referrals in current task period)
+      if (newTaskCount === 2) {
+        totalReward += 200; // Task bonus: 200 coins for completing 2 invites
+        taskBonusGiven = true;
+        console.log(`[REFERRAL] Task bonus triggered! +200 coins`);
+      }
+      
+      // Update referrer's data
+      const { error: updateError } = await supabase
         .from("users")
         .update({ 
-          coins: referrerData.coins + rewardAmount,
-          referral_count: referrerData.referral_count + 1,
+          coins: referrerData.coins + totalReward,
+          referral_count: newReferralCount,
           task_invite_friend: newTaskCount
         })
         .eq("id", referredBy);
       
-      // If task is now complete (2 friends), give bonus reward
-      if (newTaskCount === 2) {
-        taskCompleted = true;
-        // Give additional 100 coins for completing the task (200 total - 2x50 already given)
-        await supabase
-          .from("users")
-          .update({ 
-            coins: referrerData.coins + rewardAmount + 100
-          })
-          .eq("id", referredBy);
-        rewardAmount = 150; // Total for this referral including task bonus
+      if (updateError) {
+        console.error("[REFERRAL] Error updating referrer:", updateError);
+      } else {
+        console.log(`[REFERRAL] Referrer updated - new coins: ${referrerData.coins + totalReward}, new referral_count: ${newReferralCount}, task_invite_friend: ${newTaskCount}`);
       }
       
       // Notify referrer
-      let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${firstName} sizning havolangiz orqali qo'shildi.\n💰 +${rewardAmount} tanga qo'shildi!`;
-      if (taskCompleted) {
-        notifyMessage += `\n\n🏆 Vazifa bajarildi! 2 ta do'st taklif qildingiz!`;
+      let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${firstName} sizning havolangiz orqali qo'shildi.\n💰 +${profileReward} tanga qo'shildi!`;
+      if (taskBonusGiven) {
+        notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +200 bonus tanga qo'shildi!`;
       }
+      notifyMessage += `\n\n📊 Jami referallar: ${newReferralCount}`;
       
       await sendTelegramMessage(referrerTelegramId, notifyMessage);
     }
@@ -182,7 +206,10 @@ async function handleWithdrawalAction(callbackQuery: any) {
   const adminId = callbackQuery.from.id;
   const messageId = callbackQuery.message?.message_id;
   
+  console.log(`[WITHDRAWAL] Admin ${adminId} action: ${data}`);
+  
   if (String(adminId) !== TELEGRAM_ADMIN_ID) {
+    console.log(`[WITHDRAWAL] Unauthorized: ${adminId} != ${TELEGRAM_ADMIN_ID}`);
     return;
   }
   
@@ -211,10 +238,12 @@ async function handleWithdrawalAction(callbackQuery: any) {
     statusEmoji = "❌";
     statusText = "RAD ETILGAN";
   } else {
+    console.log(`[WITHDRAWAL] Unknown action: ${action}`);
     return;
   }
   
   const withdrawalIdClean = actualId;
+  console.log(`[WITHDRAWAL] Processing withdrawal ${withdrawalIdClean} with action ${action}`);
   
   // Get withdrawal info first
   const { data: withdrawal, error: fetchError } = await supabase
@@ -224,10 +253,12 @@ async function handleWithdrawalAction(callbackQuery: any) {
     .single();
   
   if (fetchError || !withdrawal) {
-    console.error("Error fetching withdrawal:", fetchError);
+    console.error("[WITHDRAWAL] Error fetching withdrawal:", fetchError);
     await sendTelegramMessage(adminId, "❌ So'rov topilmadi");
     return;
   }
+  
+  console.log(`[WITHDRAWAL] Found withdrawal: amount=${withdrawal.amount}, status=${withdrawal.status}, user_id=${withdrawal.user_id}`);
   
   // If rejecting, return coins to user
   if (action === "reject") {
@@ -238,10 +269,17 @@ async function handleWithdrawalAction(callbackQuery: any) {
       .single();
     
     if (userData) {
-      await supabase
+      console.log(`[WITHDRAWAL] Returning ${withdrawal.amount} coins to user (current: ${userData.coins})`);
+      const { error: refundError } = await supabase
         .from("users")
         .update({ coins: userData.coins + withdrawal.amount })
         .eq("id", withdrawal.user_id);
+      
+      if (refundError) {
+        console.error("[WITHDRAWAL] Error refunding coins:", refundError);
+      } else {
+        console.log(`[WITHDRAWAL] Coins refunded successfully, new balance: ${userData.coins + withdrawal.amount}`);
+      }
     }
   }
   
@@ -255,14 +293,17 @@ async function handleWithdrawalAction(callbackQuery: any) {
     .eq("id", withdrawalIdClean);
   
   if (updateError) {
-    console.error("Error updating withdrawal:", updateError);
+    console.error("[WITHDRAWAL] Error updating withdrawal:", updateError);
     await sendTelegramMessage(adminId, "❌ Xatolik yuz berdi");
     return;
   }
   
+  console.log(`[WITHDRAWAL] Status updated to ${newStatus}`);
+  
   // Notify user
   if (withdrawal.user) {
     await sendTelegramMessage(withdrawal.user.telegram_id, userMessage);
+    console.log(`[WITHDRAWAL] User ${withdrawal.user.telegram_id} notified`);
   }
   
   // Update admin message with new status and appropriate buttons
@@ -289,6 +330,8 @@ async function handleWithdrawalAction(callbackQuery: any) {
   } else {
     await sendTelegramMessage(adminId, updatedMessage, keyboard);
   }
+  
+  console.log(`[WITHDRAWAL] Admin message updated`);
 }
 
 serve(async (req) => {
