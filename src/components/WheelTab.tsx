@@ -133,7 +133,7 @@ export const WheelTab = () => {
       // Add coins to backend
       const reward = rewards[winIndex];
       try {
-        const { error } = await supabase.functions.invoke('update-coins', {
+        const { data, error } = await supabase.functions.invoke('update-coins', {
           body: { 
             telegramId: user?.id, 
             amount: reward.value,
@@ -145,10 +145,12 @@ export const WheelTab = () => {
         if (error) {
           console.error('Error updating coins:', error);
           toast.error('Balans yangilashda xatolik');
-        } else {
-          // Refresh user data to get updated balance
-          await refreshUserData();
+          // Fallback to local update
           addCoins(reward.value);
+        } else {
+          console.log('Wheel coins updated:', data);
+          // CRITICAL: Immediately refresh to sync backend state to UI
+          await refreshUserData();
         }
       } catch (err) {
         console.error('Error:', err);
