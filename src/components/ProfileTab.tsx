@@ -33,6 +33,7 @@ export const ProfileTab = () => {
   const referralCount = user?.referral_count ?? 0;
   const totalWinnings = user?.total_winnings ?? 0;  // Yechib olish mumkin bo'lgan balans
 
+  // FIXED: Use correct bot username
   const referralLink = `https://t.me/Luckygame_robot?start=ref_${user?.id || ''}`;
 
   const copyReferral = () => {
@@ -163,7 +164,7 @@ export const ProfileTab = () => {
             </div>
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-foreground">Do'stlarni taklif qiling</h3>
-              <p className="text-[10px] text-muted-foreground">Har bir taklif: 30 tanga</p>
+              <p className="text-[10px] text-muted-foreground">Har bir taklif: 50 tanga</p>
             </div>
           </div>
         </div>
