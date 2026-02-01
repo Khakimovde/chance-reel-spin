@@ -93,6 +93,8 @@ serve(async (req) => {
         .select("*", { count: "exact", head: true })
         .eq("referrer_id", currentUser.id);
       
+      console.log(`[SYNC-USER] Actual referral count from referrals table: ${referralCount}`);
+      
       // Update referral_count if it's different from actual count
       if (referralCount !== null && referralCount !== currentUser.referral_count) {
         console.log(`[SYNC-USER] Updating referral_count from ${currentUser.referral_count} to ${referralCount}`);
@@ -101,6 +103,18 @@ serve(async (req) => {
           .update({ referral_count: referralCount })
           .eq("id", currentUser.id);
         currentUser.referral_count = referralCount;
+      }
+      
+      // Calculate task_invite_friend (min of referral_count and 2 for task completion)
+      // This ensures the task counter shows correctly
+      const taskInviteFriend = Math.min(referralCount || 0, 2);
+      if (taskInviteFriend !== currentUser.task_invite_friend) {
+        console.log(`[SYNC-USER] Syncing task_invite_friend to ${taskInviteFriend}`);
+        await supabase
+          .from("users")
+          .update({ task_invite_friend: taskInviteFriend })
+          .eq("id", currentUser.id);
+        currentUser.task_invite_friend = taskInviteFriend;
       }
     }
     

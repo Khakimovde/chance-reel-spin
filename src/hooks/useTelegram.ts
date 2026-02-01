@@ -16,6 +16,7 @@ export interface UserData {
   referral_count: number;
   total_winnings: number;
   referral_code?: string;
+  task_invite_friend: number;
 }
 
 export const useTelegram = () => {
@@ -23,6 +24,7 @@ export const useTelegram = () => {
   const [isLoading, setIsLoading] = useState(true);
   const didInitRef = useRef(false);
   const syncWithBackend = useGameStore((s) => s.syncWithBackend);
+  const syncTaskInviteFriend = useGameStore((s) => s.syncTaskInviteFriend);
 
   const getLocalFallback = () => {
     const state = useGameStore.getState();
@@ -31,6 +33,7 @@ export const useTelegram = () => {
       tickets: 0,
       referral_count: state.referralCount,
       total_winnings: state.totalWinnings,
+      task_invite_friend: state.taskCompletion.inviteFriend,
     };
   };
 
@@ -57,6 +60,7 @@ export const useTelegram = () => {
           tickets: local.tickets,
           referral_count: local.referral_count,
           total_winnings: local.total_winnings,
+          task_invite_friend: local.task_invite_friend,
         });
         return;
       }
@@ -74,6 +78,7 @@ export const useTelegram = () => {
           referral_count: data.user.referral_count,
           total_winnings: data.user.total_winnings,
           referral_code: data.user.referral_code,
+          task_invite_friend: data.user.task_invite_friend || 0,
         };
         setUser(userData);
         
@@ -84,6 +89,9 @@ export const useTelegram = () => {
           data.user.referral_count,
           data.user.total_winnings
         );
+        
+        // Sync task invite friend count from backend
+        syncTaskInviteFriend(data.user.task_invite_friend || 0);
       }
     } catch (err) {
       console.error('Error fetching user data:', err);
@@ -97,10 +105,11 @@ export const useTelegram = () => {
           tickets: local.tickets,
           referral_count: local.referral_count,
           total_winnings: local.total_winnings,
+          task_invite_friend: local.task_invite_friend,
         });
       }
     }
-  }, [syncWithBackend]);
+  }, [syncWithBackend, syncTaskInviteFriend]);
 
   const refreshUserData = useCallback(async () => {
     const telegramUser = getTelegramUser();

@@ -1,62 +1,72 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BottomNav } from '@/components/BottomNav';
 import { LotteryTab } from '@/components/LotteryTab';
-import { WheelTab } from '@/components/WheelTab';
-import { MysteryTab } from '@/components/MysteryTab';
-import { HistoryTab } from '@/components/HistoryTab';
-import { ProfileTab } from '@/components/ProfileTab';
-import { AdminPanel } from '@/components/AdminPanel';
 import { useTelegram } from '@/hooks/useTelegram';
 import { initTelegramApp, getTelegramUser } from '@/lib/telegram';
-import { Coins, Shield } from 'lucide-react';
+import { Coins, Shield, Loader2 } from 'lucide-react';
+
+// Lazy load non-critical tabs for faster initial load
+const WheelTab = lazy(() => import('@/components/WheelTab').then(m => ({ default: m.WheelTab })));
+const MysteryTab = lazy(() => import('@/components/MysteryTab').then(m => ({ default: m.MysteryTab })));
+const HistoryTab = lazy(() => import('@/components/HistoryTab').then(m => ({ default: m.HistoryTab })));
+const ProfileTab = lazy(() => import('@/components/ProfileTab').then(m => ({ default: m.ProfileTab })));
+const AdminPanel = lazy(() => import('@/components/AdminPanel').then(m => ({ default: m.AdminPanel })));
 
 const ADMIN_TELEGRAM_ID = 5326022510;
+
+// Loading fallback component
+const TabLoader = () => (
+  <div className="flex items-center justify-center py-20">
+    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+  </div>
+);
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('lottery');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const { user, refreshUserData } = useTelegram();
   
-  // Check if current user is admin
-  const telegramUser = getTelegramUser();
+  // Check if current user is admin - memoized
+  const telegramUser = useMemo(() => getTelegramUser(), []);
   const isAdmin = telegramUser?.id === ADMIN_TELEGRAM_ID;
 
   useEffect(() => {
     initTelegramApp();
   }, []);
 
-  // Auto-refresh user data every 3 seconds for instant balance updates
+  // Reduced refresh interval to 15 seconds for better performance
   useEffect(() => {
     const interval = setInterval(() => {
       refreshUserData();
-    }, 3000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [refreshUserData]);
 
   // Use user's backend-synced data - updates in real-time now
   const coins = user?.coins ?? 0;
 
-  const renderTab = () => {
+  // Memoized tab renderer for performance
+  const renderTab = useCallback(() => {
     switch (activeTab) {
       case 'lottery':
         return <LotteryTab />;
       case 'wheel':
-        return <WheelTab />;
+        return <Suspense fallback={<TabLoader />}><WheelTab /></Suspense>;
       case 'mystery':
-        return <MysteryTab />;
+        return <Suspense fallback={<TabLoader />}><MysteryTab /></Suspense>;
       case 'history':
-        return <HistoryTab />;
+        return <Suspense fallback={<TabLoader />}><HistoryTab /></Suspense>;
       case 'profile':
-        return <ProfileTab />;
+        return <Suspense fallback={<TabLoader />}><ProfileTab /></Suspense>;
       default:
         return <LotteryTab />;
     }
-  };
+  }, [activeTab]);
 
   // If admin panel is open, show it
   if (showAdminPanel) {
-    return <AdminPanel onBack={() => setShowAdminPanel(false)} />;
+    return <Suspense fallback={<TabLoader />}><AdminPanel onBack={() => setShowAdminPanel(false)} /></Suspense>;
   }
 
   return (

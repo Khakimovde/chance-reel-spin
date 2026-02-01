@@ -178,6 +178,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_channel_rewards: {
+        Row: {
+          channel_id: string
+          claimed_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          claimed_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          claimed_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_channel_rewards_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "required_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_channel_rewards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           coins: number
