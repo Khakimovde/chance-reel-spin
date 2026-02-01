@@ -302,11 +302,9 @@ export const WheelTab = () => {
             }`}>
               {isLoadingAd ? (
                 <Loader2 className="w-6 h-6 text-white animate-spin" />
-              ) : isSpinning ? (
-                <span className="text-xs font-black text-white drop-shadow-md">...</span>
               ) : (
                 <span className="text-xs font-black text-white drop-shadow-md text-center leading-tight">
-                  {canSpin ? 'BOSISH' : 'KUTISH'}
+                  {isSpinning ? '' : canSpin ? 'BOSISH' : 'KUTISH'}
                 </span>
               )}
             </div>

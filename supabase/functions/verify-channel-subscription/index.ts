@@ -40,17 +40,39 @@ serve(async (req) => {
 
     if (!data.ok) {
       console.log("Telegram API error:", data.description);
-      return new Response(JSON.stringify({ subscribed: false, error: data.description }), {
+      
+      // Provide more specific error messages
+      let errorMessage = data.description;
+      if (data.error_code === 400 && data.description?.includes("chat not found")) {
+        errorMessage = "Kanal topilmadi. Admin botni kanalga qo'shishi kerak.";
+      } else if (data.error_code === 400 && data.description?.includes("user not found")) {
+        errorMessage = "Foydalanuvchi topilmadi";
+      } else if (data.error_code === 403) {
+        errorMessage = "Bot kanaldan chiqarilgan yoki bloklangan";
+      } else if (data.error_code === 404) {
+        errorMessage = "Bot kanalga admin sifatida qo'shilmagan. Iltimos, botni (@Luckygame_robot) kanalga admin qilib qo'shing.";
+      }
+      
+      return new Response(JSON.stringify({ 
+        subscribed: false, 
+        error: errorMessage,
+        errorCode: data.error_code
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const status = data.result?.status;
+    // Include "left" check - if user left the channel
     const isSubscribed = ["member", "administrator", "creator"].includes(status);
 
     console.log(`User ${telegramId} subscription status in ${formattedChannel}: ${status}, isSubscribed: ${isSubscribed}`);
 
-    return new Response(JSON.stringify({ subscribed: isSubscribed, status }), {
+    return new Response(JSON.stringify({ 
+      subscribed: isSubscribed, 
+      status,
+      message: isSubscribed ? "Obuna tasdiqlandi" : "Kanalga obuna bo'lmagan" 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

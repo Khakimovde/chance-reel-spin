@@ -171,8 +171,8 @@ export const MysteryTab = () => {
     },
   ];
 
-  const verifyChannelSubscription = async (channelUsername: string) => {
-    if (!user?.id) return false;
+  const verifyChannelSubscription = async (channelUsername: string): Promise<{ subscribed: boolean; error?: string }> => {
+    if (!user?.id) return { subscribed: false, error: 'Foydalanuvchi topilmadi' };
     
     setCheckingChannel(true);
     try {
@@ -186,16 +186,24 @@ export const MysteryTab = () => {
       if (error) {
         console.error('Error verifying channel:', error);
         setCheckingChannel(false);
-        return false;
+        return { subscribed: false, error: 'Tekshirishda xatolik' };
       }
       
-      const isSubscribed = data?.subscribed === true;
       setCheckingChannel(false);
-      return isSubscribed;
+      
+      if (data?.subscribed === true) {
+        return { subscribed: true };
+      } else {
+        // Return specific error message from backend
+        return { 
+          subscribed: false, 
+          error: data?.error || 'Kanalga obuna topilmadi' 
+        };
+      }
     } catch (err) {
       console.error('Error:', err);
       setCheckingChannel(false);
-      return false;
+      return { subscribed: false, error: 'Xatolik yuz berdi' };
     }
   };
 
@@ -291,9 +299,9 @@ export const MysteryTab = () => {
     
     setIsLoading(true);
     
-    const verified = await verifyChannelSubscription(selectedChannelTask.channel_username);
+    const result = await verifyChannelSubscription(selectedChannelTask.channel_username);
     
-    if (verified) {
+    if (result.subscribed) {
       const success = await updateCoinsInBackend(selectedChannelTask.reward_amount);
       if (success) {
         addCoins(selectedChannelTask.reward_amount);
@@ -303,7 +311,8 @@ export const MysteryTab = () => {
       }
     } else {
       hapticFeedback('error');
-      toast.error('Kanalga obuna topilmadi. Avval kanalga obuna bo\'ling!');
+      // Show specific error message from backend
+      toast.error(result.error || 'Kanalga obuna topilmadi. Avval kanalga obuna bo\'ling!');
     }
     
     setIsLoading(false);
