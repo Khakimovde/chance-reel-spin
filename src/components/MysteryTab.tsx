@@ -60,7 +60,7 @@ export const MysteryTab = () => {
   const updateCoinsInBackend = async (amount: number, statsType?: string) => {
     if (!user?.id) return false;
     try {
-      const { error } = await supabase.functions.invoke('update-coins', {
+      const { data, error } = await supabase.functions.invoke('update-coins', {
         body: { 
           telegramId: user.id, 
           amount,
@@ -72,6 +72,8 @@ export const MysteryTab = () => {
         console.error('Error updating coins:', error);
         return false;
       }
+      console.log('Coins updated in backend:', data);
+      // CRITICAL: Refresh immediately to sync backend state to UI
       await refreshUserData();
       return true;
     } catch (err) {
@@ -264,7 +266,7 @@ export const MysteryTab = () => {
         if (newCount >= 10) {
           const success = await updateCoinsInBackend(200);
           if (success) {
-            addCoins(200);
+            // No need to call addCoins - refreshUserData already synced the state
             toast.success('🎉 10 ta reklama ko\'rildi! +200 tanga qo\'shildi!');
           }
         } else {
@@ -360,7 +362,7 @@ export const MysteryTab = () => {
       
       const success = await updateCoinsInBackend(selectedChannelTask.reward_amount);
       if (success) {
-        addCoins(selectedChannelTask.reward_amount);
+        // No need to call addCoins - refreshUserData already synced the state
         setChannelSubscriptions(prev => ({ ...prev, [selectedChannelTask.id]: true }));
         toast.success(`+${selectedChannelTask.reward_amount} tanga qo'shildi!`);
         hapticFeedback('success');
