@@ -27,6 +27,13 @@ interface DailyTask {
   isTimed: boolean;
 }
 
+interface RequiredChannel {
+  id: string;
+  channel_username: string;
+  reward_amount: number;
+  is_active: boolean;
+}
+
 const formatTimeRemaining = (ms: number): string => {
   if (ms <= 0) return '00:00:00';
   const hours = Math.floor(ms / (1000 * 60 * 60));
@@ -43,9 +50,11 @@ export const MysteryTab = () => {
   const { user, refreshUserData } = useTelegram();
   const [selectedTask, setSelectedTask] = useState<DailyTask | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [channelVerified, setChannelVerified] = useState(false);
   const [checkingChannel, setCheckingChannel] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [requiredChannels, setRequiredChannels] = useState<RequiredChannel[]>([]);
+  const [selectedChannelTask, setSelectedChannelTask] = useState<RequiredChannel | null>(null);
+  const [channelSubscriptions, setChannelSubscriptions] = useState<Record<string, boolean>>({});
 
   // Helper function to update coins in backend
   const updateCoinsInBackend = async (amount: number, statsType?: string) => {
@@ -71,10 +80,42 @@ export const MysteryTab = () => {
     }
   };
 
+  // Fetch required channels from database
+  const fetchRequiredChannels = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('required_channels')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true });
+      
+      if (!error && data) {
+        setRequiredChannels(data);
+        
+        // Check which channels user has already subscribed to
+        if (user?.id) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('id')
+            .eq('telegram_id', user.id)
+            .maybeSingle();
+          
+          if (userData) {
+            // For now, we'll check each channel on demand
+            // In production, you might want to store this in a separate table
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching channels:', error);
+    }
+  };
+
   // Preload ad SDK and check task reset
   useEffect(() => {
     loadAdSdk();
     resetTasksIfNeeded();
+    fetchRequiredChannels();
   }, [resetTasksIfNeeded]);
 
   // Update countdown timer for timed tasks
@@ -91,16 +132,18 @@ export const MysteryTab = () => {
   }, [getTaskResetTime]);
 
   // Build tasks from current completion state
-  // Watch ad and invite friends are timed (reset every 6 hours)
-  // Join channel is unlimited but requires Telegram verification
+  // CHANGED: Watch 10 ads = 200 coins total (only after all 10 completed)
+  // CHANGED: Invite 2 friends = 200 coins total (only after both invited)
   const tasks: DailyTask[] = [
     {
       id: 'watch_ad',
       title: 'Reklama ko\'rish',
-      description: `${taskCompletion.watchAd}/10 ta reklama ko'rildi`,
+      description: taskCompletion.watchAd >= 10 
+        ? '10/10 ta reklama ko\'rildi ✓' 
+        : `${taskCompletion.watchAd}/10 ta reklama ko'ring`,
       icon: Play,
       image: '🎬',
-      reward: { type: 'coins', value: 50, label: '50 Tanga' },
+      reward: { type: 'coins', value: 200, label: '200 Tanga' },
       maxCount: 10,
       currentCount: taskCompletion.watchAd,
       completed: taskCompletion.watchAd >= 10,
@@ -112,10 +155,12 @@ export const MysteryTab = () => {
     {
       id: 'invite_friend',
       title: 'Do\'st taklif qilish',
-      description: `${taskCompletion.inviteFriend}/2 ta do'st taklif qilindi`,
+      description: taskCompletion.inviteFriend >= 2 
+        ? '2/2 ta do\'st taklif qilindi ✓' 
+        : `${taskCompletion.inviteFriend}/2 ta do'st taklif qiling`,
       icon: Users,
       image: '👥',
-      reward: { type: 'coins', value: 100, label: '100 Tanga' },
+      reward: { type: 'coins', value: 200, label: '200 Tanga' },
       maxCount: 2,
       currentCount: taskCompletion.inviteFriend,
       completed: taskCompletion.inviteFriend >= 2,
@@ -124,38 +169,18 @@ export const MysteryTab = () => {
       taskKey: 'inviteFriend',
       isTimed: true,
     },
-    {
-      id: 'join_channel',
-      title: 'Kanalga qo\'shilish',
-      description: taskCompletion.joinChannel ? 'Obuna tasdiqlangan ✓' : 'Rasmiy kanalga obuna bo\'ling',
-      icon: Bell,
-      image: '📢',
-      reward: { type: 'coins', value: 200, label: '200 Tanga' },
-      maxCount: 1,
-      currentCount: taskCompletion.joinChannel ? 1 : 0,
-      completed: taskCompletion.joinChannel,
-      action: 'Tekshirish',
-      color: '#06B6D4',
-      taskKey: 'joinChannel',
-      isTimed: false, // Unlimited - but requires verification
-    },
   ];
 
-  const handleTaskSelect = (task: DailyTask) => {
-    if (task.completed) return;
-    hapticFeedback('selection');
-    setSelectedTask(task);
-    setChannelVerified(false);
-  };
-
-  const verifyChannelSubscription = async () => {
+  const verifyChannelSubscription = async (channelUsername: string) => {
     if (!user?.id) return false;
     
     setCheckingChannel(true);
     try {
-      // Call edge function to verify Telegram channel subscription
       const { data, error } = await supabase.functions.invoke('verify-channel-subscription', {
-        body: { telegramId: user.id }
+        body: { 
+          telegramId: user.id,
+          channelUsername: channelUsername
+        }
       });
       
       if (error) {
@@ -165,7 +190,6 @@ export const MysteryTab = () => {
       }
       
       const isSubscribed = data?.subscribed === true;
-      setChannelVerified(isSubscribed);
       setCheckingChannel(false);
       return isSubscribed;
     } catch (err) {
@@ -173,6 +197,20 @@ export const MysteryTab = () => {
       setCheckingChannel(false);
       return false;
     }
+  };
+
+  const handleTaskSelect = (task: DailyTask) => {
+    if (task.completed) return;
+    hapticFeedback('selection');
+    setSelectedTask(task);
+    setSelectedChannelTask(null);
+  };
+
+  const handleChannelTaskSelect = (channel: RequiredChannel) => {
+    if (channelSubscriptions[channel.id]) return;
+    hapticFeedback('selection');
+    setSelectedChannelTask(channel);
+    setSelectedTask(null);
   };
 
   const handleCompleteTask = async () => {
@@ -183,66 +221,45 @@ export const MysteryTab = () => {
 
     try {
       if (selectedTask.taskKey === 'watchAd') {
-        // Show ad
+        // Show ad - no coins per view, only after completing all 10
         const adShown = await showAd();
         if (!adShown) {
           setIsLoading(false);
           return;
         }
         
-        // Update backend first
-        const success = await updateCoinsInBackend(selectedTask.reward.value, 'ads');
-        if (success) {
-          completeTask('watchAd');
-          addCoins(selectedTask.reward.value);
-          toast.success(`+${selectedTask.reward.value} tanga qo'shildi!`);
+        const newCount = taskCompletion.watchAd + 1;
+        completeTask('watchAd');
+        
+        // Update stats for ad view
+        await supabase.functions.invoke('update-coins', {
+          body: { 
+            telegramId: user?.id, 
+            amount: 0,
+            source: 'task',
+            updateStats: 'ads'
+          }
+        });
+        
+        // Only give reward when all 10 are completed
+        if (newCount >= 10) {
+          const success = await updateCoinsInBackend(200);
+          if (success) {
+            addCoins(200);
+            toast.success('🎉 10 ta reklama ko\'rildi! +200 tanga qo\'shildi!');
+          }
         } else {
-          // Fallback to local
-          completeTask('watchAd');
-          addCoins(selectedTask.reward.value);
+          toast.success(`Reklama ko'rildi! ${newCount}/10`);
         }
       } else if (selectedTask.taskKey === 'inviteFriend') {
-        // Open share dialog
-        const referralCode = user?.referral_code || 'LOTTERY';
-        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/LotteryBot?start=${referralCode}`)}&text=${encodeURIComponent('🎰 Lotereya o\'yiniga qo\'shiling va tangalar yutib oling!')}`;
+        // Open share dialog - count is tracked by referral system
+        const referralLink = `https://t.me/Luckygame_robot?start=ref_${user?.id || ''}`;
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('🎰 Lotereya o\'yiniga qo\'shiling va tangalar yutib oling!')}`;
         window.open(shareUrl, '_blank');
         
-        // Update backend
-        const success = await updateCoinsInBackend(selectedTask.reward.value);
-        if (success) {
-          completeTask('inviteFriend');
-          addCoins(selectedTask.reward.value);
-          toast.success(`+${selectedTask.reward.value} tanga qo'shildi!`);
-        } else {
-          completeTask('inviteFriend');
-          addCoins(selectedTask.reward.value);
-        }
-      } else if (selectedTask.taskKey === 'joinChannel') {
-        // First open channel, then verify
-        window.open('https://t.me/LotteryChannel', '_blank');
-        
-        // Wait a moment then verify
-        setTimeout(async () => {
-          const verified = await verifyChannelSubscription();
-          if (verified) {
-            const success = await updateCoinsInBackend(selectedTask.reward.value);
-            if (success) {
-              completeTask('joinChannel');
-              addCoins(selectedTask.reward.value);
-              toast.success(`+${selectedTask.reward.value} tanga qo'shildi!`);
-            } else {
-              completeTask('joinChannel');
-              addCoins(selectedTask.reward.value);
-            }
-            hapticFeedback('success');
-          } else {
-            hapticFeedback('error');
-            toast.error('Kanalga obuna topilmadi');
-          }
-          setIsLoading(false);
-          setSelectedTask(null);
-        }, 3000);
-        return;
+        // Note: Actual counting is done by bot when friend joins
+        // We show instruction to user
+        toast.info('Do\'stingiz qo\'shilganda hisoblanadi');
       }
       
       hapticFeedback('success');
@@ -254,7 +271,47 @@ export const MysteryTab = () => {
     }
   };
 
-  const completedCount = tasks.filter(t => t.completed).length;
+  const handleChannelSubscribe = async () => {
+    if (!selectedChannelTask || !user?.id) return;
+    
+    hapticFeedback('medium');
+    
+    // Open channel first
+    const channelUrl = selectedChannelTask.channel_username.startsWith('@') 
+      ? `https://t.me/${selectedChannelTask.channel_username.slice(1)}`
+      : `https://t.me/${selectedChannelTask.channel_username}`;
+    window.open(channelUrl, '_blank');
+    
+    // Show verify button after opening
+    toast.info('Kanalga obuna bo\'lib, tekshirish tugmasini bosing');
+  };
+
+  const handleVerifyChannelSubscription = async () => {
+    if (!selectedChannelTask || !user?.id) return;
+    
+    setIsLoading(true);
+    
+    const verified = await verifyChannelSubscription(selectedChannelTask.channel_username);
+    
+    if (verified) {
+      const success = await updateCoinsInBackend(selectedChannelTask.reward_amount);
+      if (success) {
+        addCoins(selectedChannelTask.reward_amount);
+        setChannelSubscriptions(prev => ({ ...prev, [selectedChannelTask.id]: true }));
+        toast.success(`+${selectedChannelTask.reward_amount} tanga qo'shildi!`);
+        hapticFeedback('success');
+      }
+    } else {
+      hapticFeedback('error');
+      toast.error('Kanalga obuna topilmadi. Avval kanalga obuna bo\'ling!');
+    }
+    
+    setIsLoading(false);
+    setSelectedChannelTask(null);
+  };
+
+  const completedCount = tasks.filter(t => t.completed).length + Object.keys(channelSubscriptions).length;
+  const totalTasks = tasks.length + requiredChannels.length;
 
   // Check if timed tasks are all completed
   const timedTasksCompleted = taskCompletion.watchAd >= 10 && taskCompletion.inviteFriend >= 2;
@@ -276,19 +333,19 @@ export const MysteryTab = () => {
       <div className="glass-card-elevated p-4 space-y-3">
         <div className="flex items-center justify-between text-sm">
           <span className="font-medium text-foreground">Jarayon</span>
-          <span className="text-primary font-bold">{completedCount}/{tasks.length}</span>
+          <span className="text-primary font-bold">{completedCount}/{totalTasks}</span>
         </div>
         <div className="h-3 bg-muted rounded-full overflow-hidden">
           <motion.div
             className="h-full gradient-primary rounded-full"
             initial={{ width: 0 }}
-            animate={{ width: `${(completedCount / tasks.length) * 100}%` }}
+            animate={{ width: `${(completedCount / totalTasks) * 100}%` }}
             transition={{ duration: 0.5 }}
           />
         </div>
       </div>
 
-      {/* Task List */}
+      {/* Timed Tasks */}
       <AnimatePresence mode="wait">
         <motion.div
           key="tasks"
@@ -332,11 +389,6 @@ export const MysteryTab = () => {
                     </div>
                     <span className="text-xs text-amber-600 font-semibold">{task.reward.label}</span>
                   </div>
-                  {!task.isTimed && !task.completed && (
-                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                      Cheksiz
-                    </span>
-                  )}
                 </div>
                 
                 {/* Progress bar for multi-count tasks */}
@@ -353,15 +405,16 @@ export const MysteryTab = () => {
               {/* Action / Status */}
               <div className="flex flex-col items-end gap-1">
                 {task.completed ? (
-                  <span className="px-2 py-1 bg-success/20 text-success text-xs font-semibold rounded-lg flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    Bajarildi
-                  </span>
-                ) : task.isTimed && timedTasksCompleted ? (
-                  // Show countdown timer for timed tasks that are completed
-                  <div className="flex items-center gap-1 text-muted-foreground bg-muted px-2 py-1 rounded-lg">
-                    <Clock className="w-3 h-3" />
-                    <span className="text-[10px] font-medium">{formatTimeRemaining(timeRemaining)}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="px-2 py-1 bg-success/20 text-success text-xs font-semibold rounded-lg flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Bajarildi
+                    </span>
+                    {/* Show countdown for completed timed tasks */}
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Clock className="w-3 h-3" />
+                      <span className="text-[10px] font-medium">{formatTimeRemaining(timeRemaining)}</span>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1 text-primary">
@@ -372,6 +425,64 @@ export const MysteryTab = () => {
               </div>
             </motion.button>
           ))}
+
+          {/* Dynamic Channel Tasks from Database */}
+          {requiredChannels.map((channel, index) => {
+            const isSubscribed = channelSubscriptions[channel.id];
+            return (
+              <motion.button
+                key={channel.id}
+                onClick={() => handleChannelTaskSelect(channel)}
+                disabled={isSubscribed || isLoading}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: (tasks.length + index) * 0.05 }}
+                className={`w-full glass-card p-4 flex items-center gap-4 text-left transition-all ${
+                  isSubscribed ? 'opacity-60' : 'hover:shadow-md active:scale-[0.99]'
+                }`}
+              >
+                <div 
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-sm ${
+                    isSubscribed ? 'bg-success/10' : 'bg-cyan-500/10'
+                  }`}
+                >
+                  {isSubscribed ? '✅' : '📢'}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold text-foreground">Kanalga obuna</span>
+                  <p className="text-xs text-muted-foreground">
+                    {isSubscribed ? 'Obuna tasdiqlangan ✓' : channel.channel_username}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-1">
+                      <div className="w-4 h-4 rounded-full bg-amber-100 flex items-center justify-center">
+                        <Coins className="w-2.5 h-2.5 text-amber-600" />
+                      </div>
+                      <span className="text-xs text-amber-600 font-semibold">{channel.reward_amount} Tanga</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                      Cheksiz
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-1">
+                  {isSubscribed ? (
+                    <span className="px-2 py-1 bg-success/20 text-success text-xs font-semibold rounded-lg flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Bajarildi
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-1 text-primary">
+                      <span className="text-xs font-semibold">Obuna</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                  )}
+                </div>
+              </motion.button>
+            );
+          })}
         </motion.div>
       </AnimatePresence>
 
@@ -410,22 +521,29 @@ export const MysteryTab = () => {
                 <span className="text-2xl font-bold">{selectedTask.reward.label}</span>
               </div>
 
-              {selectedTask.taskKey === 'joinChannel' && (
+              {selectedTask.taskKey === 'watchAd' && (
                 <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
-                  <p>📢 Kanalga qo'shilib, tekshirish tugmasini bosing.</p>
-                  <p className="text-xs mt-1">Telegram ID orqali obuna tekshiriladi.</p>
+                  <p>🎬 10 ta reklamani ko'ring va 200 tanga oling!</p>
+                  <p className="text-xs mt-1">Hozirgi: {taskCompletion.watchAd}/10</p>
+                </div>
+              )}
+
+              {selectedTask.taskKey === 'inviteFriend' && (
+                <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
+                  <p>👥 2 ta do'st taklif qiling va 200 tanga oling!</p>
+                  <p className="text-xs mt-1">Do'st qo'shilganda bot orqali hisoblanadi</p>
                 </div>
               )}
 
               <button
                 onClick={handleCompleteTask}
-                disabled={isLoading || checkingChannel}
+                disabled={isLoading}
                 className="w-full py-4 rounded-2xl gradient-primary text-white font-bold shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
               >
-                {isLoading || checkingChannel ? (
+                {isLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    {checkingChannel ? 'Tekshirilmoqda...' : 'Yuklanmoqda...'}
+                    Yuklanmoqda...
                   </>
                 ) : (
                   <>
@@ -438,6 +556,84 @@ export const MysteryTab = () => {
               <button
                 onClick={() => setSelectedTask(null)}
                 disabled={isLoading}
+                className="w-full py-3 text-muted-foreground font-medium"
+              >
+                Bekor qilish
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Channel Subscription Modal */}
+      <AnimatePresence>
+        {selectedChannelTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+            onClick={() => !isLoading && !checkingChannel && setSelectedChannelTask(null)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card w-full max-w-md rounded-t-3xl p-6 space-y-4"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl bg-cyan-500/20">
+                  📢
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Kanalga qo'shilish</h3>
+                  <p className="text-sm text-muted-foreground">{selectedChannelTask.channel_username}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 py-4">
+                <Coins className="w-6 h-6 text-amber-500" />
+                <span className="text-2xl font-bold">{selectedChannelTask.reward_amount} Tanga</span>
+              </div>
+
+              <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
+                <p>📢 Kanalga obuna bo'lib, tekshirish tugmasini bosing.</p>
+                <p className="text-xs mt-1">Telegram ID orqali obuna tekshiriladi.</p>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={handleChannelSubscribe}
+                  disabled={isLoading || checkingChannel}
+                  className="w-full py-4 rounded-2xl bg-[#0088cc] text-white font-bold shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
+                >
+                  <Bell className="w-5 h-5" />
+                  Kanalga o'tish
+                </button>
+
+                <button
+                  onClick={handleVerifyChannelSubscription}
+                  disabled={isLoading || checkingChannel}
+                  className="w-full py-4 rounded-2xl gradient-primary text-white font-bold shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
+                >
+                  {checkingChannel ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Tekshirilmoqda...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      Tekshirish
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <button
+                onClick={() => setSelectedChannelTask(null)}
+                disabled={isLoading || checkingChannel}
                 className="w-full py-3 text-muted-foreground font-medium"
               >
                 Bekor qilish

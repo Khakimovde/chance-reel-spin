@@ -31,6 +31,24 @@ async function sendTelegramMessage(chatId: string | number, text: string, replyM
   return response.json();
 }
 
+async function editTelegramMessage(chatId: string | number, messageId: number, text: string, replyMarkup?: any) {
+  const body: any = {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: "HTML",
+  };
+  if (replyMarkup) {
+    body.reply_markup = JSON.stringify(replyMarkup);
+  }
+  
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 async function handleStart(message: any) {
   const telegramId = message.from.id;
   const firstName = message.from.first_name || "";
@@ -41,18 +59,21 @@ async function handleStart(message: any) {
   // Check for referral
   const text = message.text || "";
   let referredBy: string | null = null;
+  let referrerTelegramId: number | null = null;
+  
   if (text.includes("ref_")) {
     const refId = text.split("ref_")[1];
     if (refId && refId !== String(telegramId)) {
       // Find referrer by telegram_id
       const { data: referrer } = await supabase
         .from("users")
-        .select("id")
+        .select("id, telegram_id, coins, referral_count")
         .eq("telegram_id", parseInt(refId))
         .maybeSingle();
       
       if (referrer) {
         referredBy = referrer.id;
+        referrerTelegramId = referrer.telegram_id;
       }
     }
   }
@@ -81,8 +102,8 @@ async function handleStart(message: any) {
       last_name: lastName,
       username,
       photo_url: photoUrl,
-      coins: 0,
-      tickets: 1, // 1 free ticket for new users
+      coins: 500,
+      tickets: 3,
       referred_by: referredBy,
     })
     .select()
@@ -94,48 +115,72 @@ async function handleStart(message: any) {
     return;
   }
   
-  // If referred, reward the referrer
-  if (referredBy) {
+  // If referred, reward the referrer with 50 coins (profile referral)
+  if (referredBy && referrerTelegramId) {
     // Create referral record
     await supabase.from("referrals").insert({
       referrer_id: referredBy,
       referred_id: newUser.id,
     });
     
-    // Get referrer data first
+    // Get referrer's current data
     const { data: referrerData } = await supabase
       .from("users")
-      .select("coins, referral_count, telegram_id")
+      .select("coins, referral_count, task_invite_friend")
       .eq("id", referredBy)
       .single();
     
     if (referrerData) {
-      // Update the referrer with 30 coins reward
+      // Base referral reward: 50 coins
+      let rewardAmount = 50;
+      let taskCompleted = false;
+      
+      // Check if this counts towards task completion (first 2 referrals per period)
+      const newTaskCount = referrerData.task_invite_friend + 1;
+      
+      // Update referrer: add coins and increment counts
       await supabase
         .from("users")
         .update({ 
-          coins: referrerData.coins + 30,
-          referral_count: referrerData.referral_count + 1
+          coins: referrerData.coins + rewardAmount,
+          referral_count: referrerData.referral_count + 1,
+          task_invite_friend: newTaskCount
         })
         .eq("id", referredBy);
       
+      // If task is now complete (2 friends), give bonus reward
+      if (newTaskCount === 2) {
+        taskCompleted = true;
+        // Give additional 100 coins for completing the task (200 total - 2x50 already given)
+        await supabase
+          .from("users")
+          .update({ 
+            coins: referrerData.coins + rewardAmount + 100
+          })
+          .eq("id", referredBy);
+        rewardAmount = 150; // Total for this referral including task bonus
+      }
+      
       // Notify referrer
-      await sendTelegramMessage(
-        referrerData.telegram_id,
-        `🎉 <b>Yangi referal!</b>\n\n${firstName} sizning havolangiz orqali qo'shildi.\n💰 +30 tanga qo'shildi!`
-      );
+      let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${firstName} sizning havolangiz orqali qo'shildi.\n💰 +${rewardAmount} tanga qo'shildi!`;
+      if (taskCompleted) {
+        notifyMessage += `\n\n🏆 Vazifa bajarildi! 2 ta do'st taklif qildingiz!`;
+      }
+      
+      await sendTelegramMessage(referrerTelegramId, notifyMessage);
     }
   }
   
   await sendTelegramMessage(
     telegramId,
-    `🎰 <b>Xush kelibsiz, ${firstName}!</b>\n\nSiz muvaffaqiyatli ro'yxatdan o'tdingiz!\n\n🎁 Bonus: 1 ta bepul chipta!\n\nO'yinni boshlash uchun ilovani oching.`
+    `🎰 <b>Xush kelibsiz, ${firstName}!</b>\n\nSiz muvaffaqiyatli ro'yxatdan o'tdingiz!\n\n🎁 Bonus: 500 tanga va 3 ta bepul chipta!\n\nO'yinni boshlash uchun ilovani oching.`
   );
 }
 
 async function handleWithdrawalAction(callbackQuery: any) {
   const data = callbackQuery.data;
   const adminId = callbackQuery.from.id;
+  const messageId = callbackQuery.message?.message_id;
   
   if (String(adminId) !== TELEGRAM_ADMIN_ID) {
     return;
@@ -147,35 +192,71 @@ async function handleWithdrawalAction(callbackQuery: any) {
   
   let newStatus = "";
   let userMessage = "";
+  let statusEmoji = "";
+  let statusText = "";
   
-  if (data.startsWith("approve_")) {
+  if (action === "approve") {
     newStatus = "approved";
     userMessage = "✅ Sizning pul yechish so'rovingiz qabul qilindi. Tez orada to'lov amalga oshiriladi.";
-  } else if (data.startsWith("pay_")) {
+    statusEmoji = "✅";
+    statusText = "TASDIQLANGAN";
+  } else if (action === "pay") {
     newStatus = "paid";
     userMessage = "💰 Sizning pulingiz to'landi! Rahmat!";
-  } else if (data.startsWith("reject_")) {
+    statusEmoji = "💰";
+    statusText = "TO'LANGAN";
+  } else if (action === "reject") {
     newStatus = "rejected";
-    userMessage = "❌ Sizning pul yechish so'rovingiz rad etildi.";
+    userMessage = "❌ Sizning pul yechish so'rovingiz rad etildi. Tangalaringiz balansga qaytarildi.";
+    statusEmoji = "❌";
+    statusText = "RAD ETILGAN";
   } else {
     return;
   }
   
   const withdrawalIdClean = actualId;
   
+  // Get withdrawal info first
+  const { data: withdrawal, error: fetchError } = await supabase
+    .from("withdrawals")
+    .select("*, user:users(*)")
+    .eq("id", withdrawalIdClean)
+    .single();
+  
+  if (fetchError || !withdrawal) {
+    console.error("Error fetching withdrawal:", fetchError);
+    await sendTelegramMessage(adminId, "❌ So'rov topilmadi");
+    return;
+  }
+  
+  // If rejecting, return coins to user
+  if (action === "reject") {
+    const { data: userData } = await supabase
+      .from("users")
+      .select("coins")
+      .eq("id", withdrawal.user_id)
+      .single();
+    
+    if (userData) {
+      await supabase
+        .from("users")
+        .update({ coins: userData.coins + withdrawal.amount })
+        .eq("id", withdrawal.user_id);
+    }
+  }
+  
   // Update withdrawal status
-  const { data: withdrawal, error } = await supabase
+  const { error: updateError } = await supabase
     .from("withdrawals")
     .update({ 
       status: newStatus,
       processed_at: new Date().toISOString()
     })
-    .eq("id", withdrawalIdClean)
-    .select("*, user:users(*)")
-    .single();
+    .eq("id", withdrawalIdClean);
   
-  if (error || !withdrawal) {
-    console.error("Error updating withdrawal:", error);
+  if (updateError) {
+    console.error("Error updating withdrawal:", updateError);
+    await sendTelegramMessage(adminId, "❌ Xatolik yuz berdi");
     return;
   }
   
@@ -184,12 +265,30 @@ async function handleWithdrawalAction(callbackQuery: any) {
     await sendTelegramMessage(withdrawal.user.telegram_id, userMessage);
   }
   
-  // Update admin message
-  const statusEmoji = newStatus === "approved" ? "✅" : newStatus === "paid" ? "💰" : "❌";
-  await sendTelegramMessage(
-    adminId,
-    `${statusEmoji} So'rov ${newStatus === "approved" ? "qabul qilindi" : newStatus === "paid" ? "to'landi" : "rad etildi"}.\nID: ${withdrawalIdClean}`
-  );
+  // Update admin message with new status and appropriate buttons
+  const updatedMessage = `${statusEmoji} <b>Pul yechish so'rovi - ${statusText}</b>\n\n` +
+    `👤 Foydalanuvchi: ${withdrawal.user?.first_name || ''} ${withdrawal.user?.last_name || ''}\n` +
+    `📱 Username: @${withdrawal.user?.username || "yo'q"}\n` +
+    `🆔 Telegram ID: ${withdrawal.user?.telegram_id}\n` +
+    `💵 Miqdor: ${withdrawal.amount} tanga\n` +
+    `📍 Hamyon: ${withdrawal.wallet_address || "ko'rsatilmagan"}\n` +
+    `✅ Holat: ${statusText}`;
+  
+  // Only show "To'lash" button for approved status
+  let keyboard = undefined;
+  if (newStatus === "approved") {
+    keyboard = {
+      inline_keyboard: [
+        [{ text: "💰 To'lash", callback_data: `pay_${withdrawalIdClean}` }],
+      ],
+    };
+  }
+  
+  if (messageId) {
+    await editTelegramMessage(adminId, messageId, updatedMessage, keyboard);
+  } else {
+    await sendTelegramMessage(adminId, updatedMessage, keyboard);
+  }
 }
 
 serve(async (req) => {

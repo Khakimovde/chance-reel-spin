@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const CHANNEL_USERNAME = "@LotteryChannel"; // Can be made configurable via admin
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { telegramId } = await req.json();
+    const { telegramId, channelUsername } = await req.json();
 
     if (!telegramId) {
       return new Response(JSON.stringify({ error: "Missing telegramId", subscribed: false }), {
@@ -23,15 +22,24 @@ serve(async (req) => {
       });
     }
 
+    // Use provided channel username or default
+    const channel = channelUsername || "@LotteryChannel";
+    
+    // Ensure channel username starts with @
+    const formattedChannel = channel.startsWith('@') ? channel : `@${channel}`;
+
+    console.log(`Checking subscription for user ${telegramId} in channel ${formattedChannel}`);
+
     // Check if user is a member of the channel
     const response = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(CHANNEL_USERNAME)}&user_id=${telegramId}`
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(formattedChannel)}&user_id=${telegramId}`
     );
 
     const data = await response.json();
-    console.log("Telegram API response:", data);
+    console.log("Telegram API response:", JSON.stringify(data));
 
     if (!data.ok) {
+      console.log("Telegram API error:", data.description);
       return new Response(JSON.stringify({ subscribed: false, error: data.description }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -39,6 +47,8 @@ serve(async (req) => {
 
     const status = data.result?.status;
     const isSubscribed = ["member", "administrator", "creator"].includes(status);
+
+    console.log(`User ${telegramId} subscription status in ${formattedChannel}: ${status}, isSubscribed: ${isSubscribed}`);
 
     return new Response(JSON.stringify({ subscribed: isSubscribed, status }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

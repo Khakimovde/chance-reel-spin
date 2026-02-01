@@ -91,6 +91,8 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [newChannelUsername, setNewChannelUsername] = useState('');
   const [newChannelReward, setNewChannelReward] = useState('200');
   const [isAddingChannel, setIsAddingChannel] = useState(false);
+  const [editingChannel, setEditingChannel] = useState<RequiredChannel | null>(null);
+  const [editChannelReward, setEditChannelReward] = useState('');
 
   // Auto-refresh interval
   useEffect(() => {
@@ -151,6 +153,24 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       toast.error('Kanal qo\'shishda xatolik');
     } finally {
       setIsAddingChannel(false);
+    }
+  };
+
+  const updateChannelReward = async (channelId: string, newReward: number) => {
+    try {
+      const { error } = await supabase
+        .from('required_channels')
+        .update({ reward_amount: newReward })
+        .eq('id', channelId);
+
+      if (error) throw error;
+
+      toast.success('Kanal yangilandi');
+      setEditingChannel(null);
+      await fetchChannels();
+    } catch (error) {
+      console.error('Error updating channel:', error);
+      toast.error('Kanal yangilashda xatolik');
     }
   };
 
@@ -398,13 +418,13 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">Kutilmoqda</span>;
+        return <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-medium border border-amber-200">⏳ Kutilmoqda</span>;
       case 'approved':
-        return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">Tasdiqlangan</span>;
+        return <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium border border-blue-200">✅ Tasdiqlangan</span>;
       case 'paid':
-        return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">To'langan</span>;
+        return <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium border border-green-200">💰 To'langan</span>;
       case 'rejected':
-        return <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">Rad etilgan</span>;
+        return <span className="px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-medium border border-red-200">❌ Rad etilgan</span>;
       default:
         return null;
     }
@@ -642,13 +662,30 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   <p className="text-muted-foreground">Hozircha so'rovlar yo'q</p>
                 </div>
               ) : (
-                withdrawals.map((withdrawal, index) => (
+                withdrawals.map((withdrawal, index) => {
+                  // Get card background color based on status
+                  const getCardStyle = () => {
+                    switch (withdrawal.status) {
+                      case 'pending':
+                        return 'border-l-4 border-l-amber-400';
+                      case 'approved':
+                        return 'border-l-4 border-l-blue-400 bg-blue-50/30';
+                      case 'paid':
+                        return 'border-l-4 border-l-green-400 bg-green-50/30';
+                      case 'rejected':
+                        return 'border-l-4 border-l-red-400 bg-red-50/30';
+                      default:
+                        return '';
+                    }
+                  };
+
+                  return (
                   <motion.div
                     key={withdrawal.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="glass-card-elevated p-4 space-y-3"
+                    className={`glass-card-elevated p-4 space-y-3 ${getCardStyle()}`}
                   >
                     <div className="flex items-start justify-between">
                       <div>
@@ -685,6 +722,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       {new Date(withdrawal.created_at).toLocaleString('uz-UZ')}
                     </div>
 
+                    {/* Pending: Show Approve + Reject buttons */}
                     {withdrawal.status === 'pending' && (
                       <div className="flex gap-2 pt-2">
                         <button
@@ -712,6 +750,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       </div>
                     )}
 
+                    {/* Approved: Show Pay button */}
                     {withdrawal.status === 'approved' && (
                       <button
                         onClick={() => handleWithdrawalAction(withdrawal.id, 'pay')}
@@ -728,8 +767,23 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                         )}
                       </button>
                     )}
+
+                    {/* Paid: Show success message */}
+                    {withdrawal.status === 'paid' && (
+                      <div className="text-center py-2 text-green-600 font-medium text-sm">
+                        ✅ To'lov amalga oshirildi
+                      </div>
+                    )}
+
+                    {/* Rejected: Show reason if available */}
+                    {withdrawal.status === 'rejected' && (
+                      <div className="text-center py-2 text-red-600 font-medium text-sm">
+                        ❌ So'rov rad etildi
+                      </div>
+                    )}
                   </motion.div>
-                ))
+                  );
+                })
               )}
             </motion.div>
           )}
@@ -803,17 +857,64 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                 ) : (
                   <div className="space-y-2">
                     {channels.map((channel) => (
-                      <div key={channel.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
-                        <div>
-                          <p className="font-medium text-foreground">{channel.channel_username}</p>
-                          <p className="text-xs text-muted-foreground">Mukofot: {channel.reward_amount} tanga</p>
+                      <div key={channel.id} className="p-3 bg-muted/50 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-foreground">{channel.channel_username}</p>
+                            <p className="text-xs text-muted-foreground">Mukofot: {channel.reward_amount} tanga</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingChannel(channel);
+                                setEditChannelReward(String(channel.reward_amount));
+                              }}
+                              className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteChannel(channel.id)}
+                              className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => deleteChannel(channel.id)}
-                          className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        
+                        {/* Inline Edit Mode */}
+                        {editingChannel?.id === channel.id && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="pt-2 border-t border-border space-y-2"
+                          >
+                            <div>
+                              <label className="text-xs text-muted-foreground block mb-1">Yangi mukofot miqdori</label>
+                              <input
+                                type="number"
+                                value={editChannelReward}
+                                onChange={(e) => setEditChannelReward(e.target.value)}
+                                className="w-full p-2 rounded-lg border border-border bg-background text-sm"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setEditingChannel(null)}
+                                className="flex-1 py-2 rounded-lg bg-muted text-muted-foreground text-sm font-medium"
+                              >
+                                Bekor
+                              </button>
+                              <button
+                                onClick={() => updateChannelReward(channel.id, parseInt(editChannelReward) || 200)}
+                                className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium"
+                              >
+                                Saqlash
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
                     ))}
                   </div>
