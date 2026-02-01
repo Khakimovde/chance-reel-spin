@@ -26,6 +26,8 @@ serve(async (req) => {
       });
     }
     
+    console.log(`[SYNC-USER] Syncing user ${telegramId}`);
+    
     // Get or create user
     const { data: user, error: fetchError } = await supabase
       .from("users")
@@ -36,6 +38,7 @@ serve(async (req) => {
     let currentUser = user;
     
     if (!currentUser) {
+      console.log(`[SYNC-USER] User ${telegramId} not found, creating new user`);
       // Create new user
       const { data: newUser, error: createError } = await supabase
         .from("users")
@@ -45,45 +48,70 @@ serve(async (req) => {
           last_name: lastName || "",
           username: username || "",
           photo_url: photoUrl || "",
-          coins: 0,
-          tickets: 1, // 1 free ticket for new users
+          coins: 500, // Welcome bonus
+          tickets: 3, // Free tickets for new users
         })
         .select()
         .single();
       
       if (createError) {
-        console.error("Error creating user:", createError);
+        console.error("[SYNC-USER] Error creating user:", createError);
         return new Response(JSON.stringify({ error: "Failed to create user" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       currentUser = newUser;
+      console.log(`[SYNC-USER] Created new user with id: ${newUser.id}`);
     } else {
-      // Update user info
-      const { data: updatedUser, error: updateError } = await supabase
-        .from("users")
-        .update({
-          first_name: firstName || currentUser.first_name,
-          last_name: lastName || currentUser.last_name,
-          username: username || currentUser.username,
-          photo_url: photoUrl || currentUser.photo_url,
-        })
-        .eq("telegram_id", telegramId)
-        .select()
-        .single();
+      console.log(`[SYNC-USER] Found existing user: ${currentUser.id}`);
       
-      if (!updateError) {
-        currentUser = updatedUser;
+      // Update user info if changed
+      const updates: any = {};
+      if (firstName && firstName !== currentUser.first_name) updates.first_name = firstName;
+      if (lastName && lastName !== currentUser.last_name) updates.last_name = lastName;
+      if (username && username !== currentUser.username) updates.username = username;
+      if (photoUrl && photoUrl !== currentUser.photo_url) updates.photo_url = photoUrl;
+      
+      if (Object.keys(updates).length > 0) {
+        const { data: updatedUser, error: updateError } = await supabase
+          .from("users")
+          .update(updates)
+          .eq("telegram_id", telegramId)
+          .select()
+          .single();
+        
+        if (!updateError && updatedUser) {
+          currentUser = updatedUser;
+          console.log(`[SYNC-USER] Updated user info`);
+        }
+      }
+      
+      // Count actual referrals from referrals table
+      const { count: referralCount } = await supabase
+        .from("referrals")
+        .select("*", { count: "exact", head: true })
+        .eq("referrer_id", currentUser.id);
+      
+      // Update referral_count if it's different from actual count
+      if (referralCount !== null && referralCount !== currentUser.referral_count) {
+        console.log(`[SYNC-USER] Updating referral_count from ${currentUser.referral_count} to ${referralCount}`);
+        await supabase
+          .from("users")
+          .update({ referral_count: referralCount })
+          .eq("id", currentUser.id);
+        currentUser.referral_count = referralCount;
       }
     }
+    
+    console.log(`[SYNC-USER] Returning user data - coins: ${currentUser.coins}, referral_count: ${currentUser.referral_count}, task_invite_friend: ${currentUser.task_invite_friend}`);
     
     return new Response(JSON.stringify({ user: currentUser }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error("Error:", err);
+    console.error("[SYNC-USER] Error:", err);
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
