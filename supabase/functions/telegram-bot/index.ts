@@ -93,11 +93,8 @@ async function handleStart(message: any) {
     .maybeSingle();
   
   if (existingUser) {
-    console.log(`[START] User ${telegramId} already exists, sending welcome back message`);
-    await sendTelegramMessage(
-      telegramId,
-      `🎰 <b>Salom, ${firstName}!</b>\n\nSiz allaqachon ro'yxatdan o'tgansiz.\n\n💰 Balans: ${existingUser.coins} tanga\n🎫 Chiptalar: ${existingUser.tickets}\n\nIlovani ochish uchun quyidagi tugmani bosing:`
-    );
+    console.log(`[START] User ${telegramId} already exists, skipping message`);
+    // Don't send any message for existing users - they just need to open the app
     return;
   }
   
