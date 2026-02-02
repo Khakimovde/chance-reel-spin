@@ -160,9 +160,9 @@ async function handleStart(message: any) {
       
       // Check if task bonus should be given (when reaching exactly 2 referrals in current task period)
       if (newTaskCount === 2) {
-        totalReward += 200; // Task bonus: 200 coins for completing 2 invites
+        totalReward += 160; // Task bonus: 160 coins for completing 2 invites
         taskBonusGiven = true;
-        console.log(`[REFERRAL] Task bonus triggered! +200 coins`);
+        console.log(`[REFERRAL] Task bonus triggered! +160 coins`);
       }
       
       // Update referrer's data
@@ -184,7 +184,7 @@ async function handleStart(message: any) {
       // Notify referrer
       let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${firstName} sizning havolangiz orqali qo'shildi.\n💰 +${profileReward} tanga qo'shildi!`;
       if (taskBonusGiven) {
-        notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +200 bonus tanga qo'shildi!`;
+        notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +160 bonus tanga qo'shildi!`;
       }
       notifyMessage += `\n\n📊 Jami referallar: ${newReferralCount}`;
       
