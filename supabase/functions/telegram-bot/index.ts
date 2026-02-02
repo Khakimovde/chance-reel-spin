@@ -58,6 +58,20 @@ async function handleStart(message: any) {
   
   console.log(`[START] User ${telegramId} (${firstName}) starting bot`);
   
+  // Mini app and support bot URLs
+  const MINI_APP_URL = "https://t.me/Luckygame_robot/app";
+  const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
+  
+  // Welcome message with buttons - always shown
+  const welcomeMessage = `👋 Salom, <b>${firstName}</b> 🌿!\n\n🎉 Xush kelibsiz!\n\n🎲 Bepul o'yini omadingizni sinab ko'ring va real daromadga ega bo'ling`;
+  
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "🎲 Lotoreya", url: MINI_APP_URL }],
+      [{ text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL }],
+    ],
+  };
+  
   // Check for referral
   const text = message.text || "";
   let referredBy: string | null = null;
@@ -93,12 +107,13 @@ async function handleStart(message: any) {
     .maybeSingle();
   
   if (existingUser) {
-    console.log(`[START] User ${telegramId} already exists, skipping message`);
-    // Don't send any message for existing users - they just need to open the app
+    console.log(`[START] User ${telegramId} already exists, sending welcome message`);
+    // Send welcome message with buttons for existing users
+    await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
     return;
   }
   
-  // Create new user
+  // Create new user with 300 coins welcome bonus
   console.log(`[START] Creating new user ${telegramId}`);
   const { data: newUser, error } = await supabase
     .from("users")
@@ -108,7 +123,7 @@ async function handleStart(message: any) {
       last_name: lastName,
       username,
       photo_url: photoUrl,
-      coins: 500,
+      coins: 300, // Welcome bonus: 300 coins
       tickets: 3,
       referred_by: referredBy,
     })
@@ -192,10 +207,8 @@ async function handleStart(message: any) {
     }
   }
   
-  await sendTelegramMessage(
-    telegramId,
-    `🎰 <b>Xush kelibsiz, ${firstName}!</b>\n\nSiz muvaffaqiyatli ro'yxatdan o'tdingiz!\n\n🎁 Bonus: 500 tanga va 3 ta bepul chipta!\n\nO'yinni boshlash uchun ilovani oching.`
-  );
+  // Send welcome message with buttons
+  await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
 }
 
 async function handleWithdrawalAction(callbackQuery: any) {
