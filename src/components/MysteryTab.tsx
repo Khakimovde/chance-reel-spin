@@ -128,8 +128,14 @@ export const MysteryTab = () => {
   useEffect(() => {
     loadAdSdk();
     resetTasksIfNeeded();
-    fetchRequiredChannels();
   }, [resetTasksIfNeeded]);
+
+  // Fetch channels and claimed rewards when user changes (including refresh)
+  useEffect(() => {
+    if (user?.id) {
+      fetchRequiredChannels();
+    }
+  }, [user?.id]);
 
   // Update countdown timer for timed tasks
   useEffect(() => {
@@ -156,7 +162,7 @@ export const MysteryTab = () => {
         : `${taskCompletion.watchAd}/10 ta reklama ko'ring`,
       icon: Play,
       image: '🎬',
-      reward: { type: 'coins', value: 200, label: '200 Tanga' },
+      reward: { type: 'coins', value: 300, label: '300 Tanga' },
       maxCount: 10,
       currentCount: taskCompletion.watchAd,
       completed: taskCompletion.watchAd >= 10,
@@ -173,7 +179,7 @@ export const MysteryTab = () => {
         : `${taskCompletion.inviteFriend}/2 ta do'st taklif qiling`,
       icon: Users,
       image: '👥',
-      reward: { type: 'coins', value: 200, label: '200 Tanga' },
+      reward: { type: 'coins', value: 160, label: '160 Tanga' },
       maxCount: 2,
       currentCount: taskCompletion.inviteFriend,
       completed: taskCompletion.inviteFriend >= 2,
@@ -264,10 +270,10 @@ export const MysteryTab = () => {
         
         // Only give reward when all 10 are completed
         if (newCount >= 10) {
-          const success = await updateCoinsInBackend(200);
+          const success = await updateCoinsInBackend(300);
           if (success) {
             // No need to call addCoins - refreshUserData already synced the state
-            toast.success('🎉 10 ta reklama ko\'rildi! +200 tanga qo\'shildi!');
+            toast.success('🎉 10 ta reklama ko\'rildi! +300 tanga qo\'shildi!');
           }
         } else {
           toast.success(`Reklama ko'rildi! ${newCount}/10`);
@@ -589,14 +595,14 @@ export const MysteryTab = () => {
 
               {selectedTask.taskKey === 'watchAd' && (
                 <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
-                  <p>🎬 10 ta reklamani ko'ring va 200 tanga oling!</p>
+                  <p>🎬 10 ta reklamani ko'ring va 300 tanga oling!</p>
                   <p className="text-xs mt-1">Hozirgi: {taskCompletion.watchAd}/10</p>
                 </div>
               )}
 
               {selectedTask.taskKey === 'inviteFriend' && (
                 <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
-                  <p>👥 2 ta do'st taklif qiling va 200 tanga oling!</p>
+                  <p>👥 2 ta do'st taklif qiling va 160 tanga oling!</p>
                   <p className="text-xs mt-1">Do'st qo'shilganda bot orqali hisoblanadi</p>
                 </div>
               )}
