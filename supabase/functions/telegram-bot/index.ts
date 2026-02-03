@@ -59,7 +59,7 @@ async function handleStart(message: any) {
   console.log(`[START] User ${telegramId} (${firstName}) starting bot`);
   
   // Mini app and support bot URLs
-  const MINI_APP_URL = "https://t.me/Luckygame_robot/app";
+  const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
   const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
   
   // Welcome message with buttons - always shown
@@ -67,7 +67,7 @@ async function handleStart(message: any) {
   
   const keyboard = {
     inline_keyboard: [
-      [{ text: "🎲 Lotoreya", url: MINI_APP_URL }],
+      [{ text: "🎲 Lotoreya", web_app: { url: MINI_APP_URL } }],
       [{ text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL }],
     ],
   };

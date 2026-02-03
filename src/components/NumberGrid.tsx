@@ -32,38 +32,28 @@ export const NumberGrid = () => {
         <p className="text-xs text-muted-foreground text-center mb-4 font-medium uppercase tracking-wide">
           Sizning Omadli Raqamlaringiz
         </p>
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-2 flex-wrap max-w-[280px] mx-auto">
           {Array.from({ length: MAX_NUMBERS }).map((_, i) => (
-            <motion.div
-              key={i}
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: i * 0.05 }}
-              className="relative"
-            >
+            <div key={i} className="relative">
               <AnimatePresence mode="wait">
                 {selectedNumbers[i] ? (
                   <motion.div
                     key={selectedNumbers[i]}
-                    initial={{ scale: 0, rotate: -180, y: -30 }}
-                    animate={{ scale: 1, rotate: 0, y: 0 }}
-                    exit={{ scale: 0, rotate: 180, y: 30 }}
-                    transition={{ type: 'spring', bounce: 0.4 }}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
                     className="lottery-ball"
                   >
                     {selectedNumbers[i]}
                   </motion.div>
                 ) : (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="lottery-ball-empty"
-                  >
+                  <div className="lottery-ball-empty">
                     <span className="text-lg">?</span>
-                  </motion.div>
+                  </div>
                 )}
               </AnimatePresence>
-            </motion.div>
+            </div>
           ))}
         </div>
         <p className="text-xs text-center text-muted-foreground mt-4">
