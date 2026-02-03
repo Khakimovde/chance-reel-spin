@@ -95,7 +95,7 @@ serve(async (req) => {
       
       console.log(`[SYNC-USER] Actual referral count from referrals table: ${referralCount}`);
       
-      // Update referral_count if it's different from actual count
+      // Update referral_count if it's different from actual count (permanent counter)
       if (referralCount !== null && referralCount !== currentUser.referral_count) {
         console.log(`[SYNC-USER] Updating referral_count from ${currentUser.referral_count} to ${referralCount}`);
         await supabase
@@ -105,16 +105,39 @@ serve(async (req) => {
         currentUser.referral_count = referralCount;
       }
       
-      // Calculate task_invite_friend (min of referral_count and 2 for task completion)
-      // This ensures the task counter shows correctly
-      const taskInviteFriend = Math.min(referralCount || 0, 2);
-      if (taskInviteFriend !== currentUser.task_invite_friend) {
-        console.log(`[SYNC-USER] Syncing task_invite_friend to ${taskInviteFriend}`);
+      // Check if task_invite_friend needs to be reset (6-hour reset like ads)
+      // Reset times: 00:00, 06:00, 12:00, 18:00
+      const now = new Date();
+      const currentHour = now.getHours();
+      const resetHours = [0, 6, 12, 18];
+      
+      // Find previous reset time
+      let prevResetHour = 0;
+      for (const h of resetHours) {
+        if (h <= currentHour) {
+          prevResetHour = h;
+        }
+      }
+      
+      const prevResetTime = new Date(now);
+      prevResetTime.setHours(prevResetHour, 0, 0, 0);
+      
+      const lastTaskReset = currentUser.last_task_reset ? new Date(currentUser.last_task_reset) : null;
+      const shouldResetTasks = !lastTaskReset || prevResetTime.getTime() > lastTaskReset.getTime();
+      
+      if (shouldResetTasks) {
+        console.log(`[SYNC-USER] Resetting task_invite_friend to 0 (6-hour reset triggered)`);
         await supabase
           .from("users")
-          .update({ task_invite_friend: taskInviteFriend })
+          .update({ 
+            task_invite_friend: 0,
+            task_watch_ad: 0,
+            last_task_reset: now.toISOString()
+          })
           .eq("id", currentUser.id);
-        currentUser.task_invite_friend = taskInviteFriend;
+        currentUser.task_invite_friend = 0;
+        currentUser.task_watch_ad = 0;
+        currentUser.last_task_reset = now.toISOString();
       }
     }
     

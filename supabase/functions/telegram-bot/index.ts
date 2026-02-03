@@ -157,7 +157,7 @@ async function handleStart(message: any) {
     // Get referrer's current data
     const { data: referrerData } = await supabase
       .from("users")
-      .select("coins, referral_count, task_invite_friend")
+      .select("coins, referral_count, task_invite_friend, last_task_reset")
       .eq("id", referredBy)
       .single();
     
@@ -165,29 +165,64 @@ async function handleStart(message: any) {
       // Profile referral reward: 50 coins (unlimited)
       const profileReward = 50;
       const newReferralCount = referrerData.referral_count + 1;
-      const newTaskCount = referrerData.task_invite_friend + 1;
       
       console.log(`[REFERRAL] Referrer current stats - coins: ${referrerData.coins}, referral_count: ${referrerData.referral_count}, task_invite_friend: ${referrerData.task_invite_friend}`);
+      
+      // Check if task needs reset first (6-hour reset)
+      const now = new Date();
+      const currentHour = now.getHours();
+      const resetHours = [0, 6, 12, 18];
+      
+      let prevResetHour = 0;
+      for (const h of resetHours) {
+        if (h <= currentHour) {
+          prevResetHour = h;
+        }
+      }
+      
+      const prevResetTime = new Date(now);
+      prevResetTime.setHours(prevResetHour, 0, 0, 0);
+      
+      const lastTaskReset = referrerData.last_task_reset ? new Date(referrerData.last_task_reset) : null;
+      const shouldResetTasks = !lastTaskReset || prevResetTime.getTime() > lastTaskReset.getTime();
+      
+      // Calculate task count after potential reset
+      let currentTaskCount = referrerData.task_invite_friend;
+      if (shouldResetTasks) {
+        currentTaskCount = 0;
+        console.log(`[REFERRAL] Task reset triggered for referrer (6-hour period)`);
+      }
+      
+      // Only increment task_invite_friend if under 2 (max for task period)
+      const newTaskCount = Math.min(currentTaskCount + 1, 2);
       
       // Calculate total reward
       let totalReward = profileReward; // Always give 50 for profile referral
       let taskBonusGiven = false;
       
       // Check if task bonus should be given (when reaching exactly 2 referrals in current task period)
-      if (newTaskCount === 2) {
+      if (newTaskCount === 2 && currentTaskCount < 2) {
         totalReward += 160; // Task bonus: 160 coins for completing 2 invites
         taskBonusGiven = true;
         console.log(`[REFERRAL] Task bonus triggered! +160 coins`);
       }
       
       // Update referrer's data
+      const updateData: any = { 
+        coins: referrerData.coins + totalReward,
+        referral_count: newReferralCount,
+        task_invite_friend: newTaskCount
+      };
+      
+      // If reset was needed, also update last_task_reset
+      if (shouldResetTasks) {
+        updateData.last_task_reset = now.toISOString();
+        updateData.task_watch_ad = 0; // Also reset ads
+      }
+      
       const { error: updateError } = await supabase
         .from("users")
-        .update({ 
-          coins: referrerData.coins + totalReward,
-          referral_count: newReferralCount,
-          task_invite_friend: newTaskCount
-        })
+        .update(updateData)
         .eq("id", referredBy);
       
       if (updateError) {
