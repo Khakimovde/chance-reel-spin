@@ -30,27 +30,42 @@ export const LotteryBallMachine = ({
   const animationRef = useRef<number>();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initialize balls
+  // Initialize balls - fewer balls for better performance
   useEffect(() => {
     const initialBalls: Ball[] = [];
-    for (let i = 1; i <= 42; i++) {
+    // Only use 20 balls instead of 42 for performance
+    const ballNumbers = Array.from({ length: 42 }, (_, i) => i + 1)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 20);
+    
+    ballNumbers.forEach((num, idx) => {
       initialBalls.push({
-        id: i,
-        value: i,
-        x: 60 + Math.random() * 80,
-        y: 60 + Math.random() * 80,
-        vx: (Math.random() - 0.5) * 4,
-        vy: (Math.random() - 0.5) * 4,
+        id: num,
+        value: num,
+        x: 50 + (idx % 5) * 20 + Math.random() * 10,
+        y: 50 + Math.floor(idx / 5) * 20 + Math.random() * 10,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
       });
-    }
+    });
     setBalls(initialBalls);
   }, []);
 
-  // Physics simulation
+  // Physics simulation - optimized with throttling
   useEffect(() => {
     if (!isSpinning) return;
 
-    const animate = () => {
+    let lastTime = 0;
+    const targetFPS = 30; // Reduce to 30fps for better performance
+    const frameInterval = 1000 / targetFPS;
+
+    const animate = (currentTime: number) => {
+      if (currentTime - lastTime < frameInterval) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastTime = currentTime;
+
       setBalls(prevBalls => {
         return prevBalls.map(ball => {
           if (drawnBalls.includes(ball.value)) return ball;
@@ -60,42 +75,35 @@ export const LotteryBallMachine = ({
           let newVx = ball.vx;
           let newVy = ball.vy;
 
-          // Circular container bounds (radius ~90)
+          // Circular container bounds
           const centerX = 100;
           const centerY = 100;
-          const radius = 85;
-          const ballRadius = 12;
+          const radius = 80;
+          const ballRadius = 10;
 
           const dx = newX - centerX;
           const dy = newY - centerY;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
           if (distance > radius - ballRadius) {
-            // Bounce off circular wall
             const normalX = dx / distance;
             const normalY = dy / distance;
             const dotProduct = newVx * normalX + newVy * normalY;
-            newVx = newVx - 2 * dotProduct * normalX * 0.8;
-            newVy = newVy - 2 * dotProduct * normalY * 0.8;
+            newVx = (newVx - 2 * dotProduct * normalX) * 0.7;
+            newVy = (newVy - 2 * dotProduct * normalY) * 0.7;
             newX = centerX + normalX * (radius - ballRadius);
             newY = centerY + normalY * (radius - ballRadius);
           }
 
-          // Add gravity toward center (swirl effect)
-          const gravityStrength = 0.02;
-          newVx -= (newX - centerX) * gravityStrength * 0.01;
-          newVy -= (newY - centerY) * gravityStrength * 0.01;
-
-          // Random turbulence
-          newVx += (Math.random() - 0.5) * 0.3;
-          newVy += (Math.random() - 0.5) * 0.3;
+          // Minimal turbulence
+          newVx += (Math.random() - 0.5) * 0.15;
+          newVy += (Math.random() - 0.5) * 0.15;
 
           // Speed limit
           const speed = Math.sqrt(newVx * newVx + newVy * newVy);
-          const maxSpeed = 5;
-          if (speed > maxSpeed) {
-            newVx = (newVx / speed) * maxSpeed;
-            newVy = (newVy / speed) * maxSpeed;
+          if (speed > 3) {
+            newVx = (newVx / speed) * 3;
+            newVy = (newVy / speed) * 3;
           }
 
           return { ...ball, x: newX, y: newY, vx: newVx, vy: newVy };
@@ -111,11 +119,11 @@ export const LotteryBallMachine = ({
     };
   }, [isSpinning, drawnBalls]);
 
-  // Draw balls one by one - FASTER timing
+  // Draw balls one by one - MUCH FASTER timing
   useEffect(() => {
     if (drawnBalls.length >= maxNumbers) {
       setIsSpinning(false);
-      setTimeout(onComplete, 300);
+      setTimeout(onComplete, 200);
       return;
     }
 
@@ -129,8 +137,8 @@ export const LotteryBallMachine = ({
         setDrawnBalls(prev => [...prev, nextNumber]);
         onBallDrawn(nextNumber, drawnBalls.length);
         setExitingBall(null);
-      }, 400); // Faster exit animation
-    }, drawnBalls.length === 0 ? 800 : 600); // Faster initial delay and between balls
+      }, 200); // Much faster exit animation
+    }, drawnBalls.length === 0 ? 400 : 300); // Much faster timing
 
     return () => clearTimeout(timer);
   }, [drawnBalls, targetNumbers, maxNumbers, onBallDrawn, onComplete]);
