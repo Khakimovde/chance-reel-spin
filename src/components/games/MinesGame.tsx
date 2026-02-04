@@ -1,28 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Coins, Bomb, Diamond, Loader2 } from 'lucide-react';
+import { Coins, Bomb, Diamond, Loader2, Settings } from 'lucide-react';
 import { hapticFeedback } from '@/lib/telegram';
 import { showAd, loadAdSdk } from '@/lib/adService';
 import { useTelegram } from '@/hooks/useTelegram';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useGameStore } from '@/store/gameStore';
 
 const GRID_SIZE = 16; // 4x4 grid
 const BET_OPTIONS = [10, 25, 50, 100];
+const BOMB_OPTIONS = [3, 4, 5, 6];
 
-// House edge: Even with few bombs, hidden mechanics favor the house
-const getBombCount = (): number => {
-  // 3-5 bombs, but weighted to have more bombs
-  const weights = [0.15, 0.35, 0.50]; // 3, 4, 5 bombs probability
-  const rand = Math.random();
-  if (rand < weights[0]) return 3;
-  if (rand < weights[0] + weights[1]) return 4;
-  return 5;
-};
-
-// Multiplier increases slowly to limit max wins
-const getMultiplier = (cellsRevealed: number): number => {
-  const multipliers = [1.0, 1.1, 1.25, 1.4, 1.6, 1.85, 2.1, 2.4, 2.8, 3.2, 3.8, 4.5];
+// Multiplier based on revealed cells and bomb count
+const getMultiplier = (cellsRevealed: number, bombCount: number): number => {
+  // More bombs = higher multiplier per reveal
+  const baseMultipliers: Record<number, number[]> = {
+    3: [1.0, 1.1, 1.2, 1.35, 1.5, 1.7, 1.9, 2.1, 2.4, 2.7, 3.0, 3.5, 4.0],
+    4: [1.0, 1.15, 1.3, 1.5, 1.7, 2.0, 2.3, 2.7, 3.1, 3.6, 4.2, 5.0],
+    5: [1.0, 1.2, 1.45, 1.75, 2.1, 2.5, 3.0, 3.6, 4.3, 5.2, 6.0],
+    6: [1.0, 1.3, 1.65, 2.1, 2.7, 3.4, 4.3, 5.4, 6.8, 8.5],
+  };
+  const multipliers = baseMultipliers[bombCount] || baseMultipliers[4];
   return multipliers[Math.min(cellsRevealed, multipliers.length - 1)];
 };
 
@@ -34,7 +33,10 @@ interface Cell {
 
 export const MinesGame = () => {
   const { user, refreshUserData } = useTelegram();
+  const addCoins = useGameStore((s) => s.addCoins);
+  const removeCoins = useGameStore((s) => s.removeCoins);
   const [betAmount, setBetAmount] = useState(BET_OPTIONS[0]);
+  const [bombCount, setBombCount] = useState(4);
   const [cells, setCells] = useState<Cell[]>([]);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
@@ -44,6 +46,7 @@ export const MinesGame = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [finalWin, setFinalWin] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
   const processedRef = useRef(false);
 
   const userCoins = user?.coins || 0;
@@ -53,9 +56,7 @@ export const MinesGame = () => {
   }, []);
 
   const initializeGame = () => {
-    const bombCount = getBombCount();
     const bombPositions = new Set<number>();
-    
     while (bombPositions.size < bombCount) {
       bombPositions.add(Math.floor(Math.random() * GRID_SIZE));
     }
@@ -88,7 +89,6 @@ export const MinesGame = () => {
     hapticFeedback('medium');
 
     try {
-      // Show ad first
       const adShown = await showAd();
       if (!adShown) {
         processedRef.current = false;
@@ -96,29 +96,29 @@ export const MinesGame = () => {
         return;
       }
 
-      // Deduct bet from balance
+      // Optimistic update
+      removeCoins(betAmount);
+
       const { error } = await supabase.functions.invoke('update-coins', {
-        body: {
-          telegramId: user?.id,
-          amount: -betAmount,
-          source: 'mines_bet'
-        }
+        body: { telegramId: user?.id, amount: -betAmount, source: 'mines_bet' }
       });
 
       if (error) {
+        addCoins(betAmount);
         toast.error("Tikish xatosi!");
         processedRef.current = false;
         setIsLoading(false);
         return;
       }
 
-      await refreshUserData();
+      refreshUserData();
       initializeGame();
       setGameStarted(true);
       setIsLoading(false);
       processedRef.current = false;
     } catch (err) {
       console.error(err);
+      addCoins(betAmount);
       toast.error("Xatolik yuz berdi");
       setIsLoading(false);
       processedRef.current = false;
@@ -135,7 +135,6 @@ export const MinesGame = () => {
     setCells(newCells);
 
     if (newCells[cellId].isBomb) {
-      // Lost - reveal all bombs
       hapticFeedback('error');
       const revealedCells = newCells.map(c => ({ ...c, revealed: true }));
       setCells(revealedCells);
@@ -146,10 +145,9 @@ export const MinesGame = () => {
       return;
     }
 
-    // Safe cell
     const newRevealedCount = revealedCount + 1;
     setRevealedCount(newRevealedCount);
-    setCurrentMultiplier(getMultiplier(newRevealedCount));
+    setCurrentMultiplier(getMultiplier(newRevealedCount, bombCount));
   };
 
   const cashOut = async () => {
@@ -161,31 +159,31 @@ export const MinesGame = () => {
 
     const winAmount = Math.floor(betAmount * currentMultiplier);
     
+    // Optimistic update
+    addCoins(winAmount);
+    
     try {
       const { error } = await supabase.functions.invoke('update-coins', {
-        body: {
-          telegramId: user?.id,
-          amount: winAmount,
-          source: 'mines_win'
-        }
+        body: { telegramId: user?.id, amount: winAmount, source: 'mines_win' }
       });
 
       if (error) {
+        removeCoins(winAmount);
         toast.error("Yutukni olishda xatolik");
       }
 
-      await refreshUserData();
+      refreshUserData();
       
       setGameOver(true);
       setWon(true);
       setFinalWin(winAmount);
       setShowResult(true);
       
-      // Reveal all bombs
       const revealedCells = cells.map(c => ({ ...c, revealed: true }));
       setCells(revealedCells);
     } catch (err) {
       console.error(err);
+      removeCoins(winAmount);
       toast.error("Xatolik yuz berdi");
     } finally {
       setIsLoading(false);
@@ -204,16 +202,9 @@ export const MinesGame = () => {
   };
 
   return (
-    <div className="space-y-4 pb-4">
-      {/* Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-foreground">💣 Mines</h2>
-        <p className="text-xs text-muted-foreground">Bombalardan qoching, tanga yutib oling!</p>
-      </div>
-
+    <div className="space-y-4 px-4">
       {!gameStarted ? (
-        // Bet Selection
-        <div className="space-y-4 px-4">
+        <div className="space-y-4">
           <div className="bg-card/50 rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Tikish miqdori:</span>
@@ -248,33 +239,60 @@ export const MinesGame = () => {
             </div>
           </div>
 
+          {/* Bomb Settings */}
+          <div className="bg-card/50 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bomb className="w-4 h-4 text-red-500" />
+                <span className="text-sm text-muted-foreground">Bomba soni:</span>
+              </div>
+              <span className="font-bold text-red-500">{bombCount}</span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {BOMB_OPTIONS.map((count) => (
+                <motion.button
+                  key={count}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setBombCount(count)}
+                  className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                    bombCount === count
+                      ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg'
+                      : 'bg-card border border-border text-foreground'
+                  }`}
+                >
+                  {count}
+                </motion.button>
+              ))}
+            </div>
+
+            <div className="text-center text-xs text-muted-foreground">
+              Ko'p bomba = yuqori koeffitsient 🎯
+            </div>
+          </div>
+
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={startGame}
             disabled={isLoading || userCoins < betAmount}
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold text-lg shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                <span>🎮 O'yinni Boshlash</span>
-              </>
-            )}
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><span>🎮</span> O'yinni Boshlash</>}
           </motion.button>
 
-          <p className="text-center text-xs text-muted-foreground">
-            (1 ta reklama ko'rib o'ynaysiz)
-          </p>
+          <p className="text-center text-xs text-muted-foreground">(1 ta reklama ko'rib o'ynaysiz)</p>
         </div>
       ) : (
-        // Game Grid
-        <div className="space-y-3 px-4">
+        <div className="space-y-3">
           {/* Stats bar */}
           <div className="flex justify-between items-center bg-card/50 rounded-xl p-3">
             <div className="text-center">
               <p className="text-xs text-muted-foreground">Tikish</p>
               <p className="font-bold text-foreground">{betAmount}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Bomba</p>
+              <p className="font-bold text-red-500">{bombCount}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-muted-foreground">Koeffitsient</p>
@@ -303,11 +321,7 @@ export const MinesGame = () => {
                 }`}
               >
                 {cell.revealed ? (
-                  cell.isBomb ? (
-                    <Bomb className="w-6 h-6 text-white" />
-                  ) : (
-                    <Diamond className="w-6 h-6 text-white" />
-                  )
+                  cell.isBomb ? <Bomb className="w-6 h-6 text-white" /> : <Diamond className="w-6 h-6 text-white" />
                 ) : (
                   <span className="text-slate-500">?</span>
                 )}
@@ -331,11 +345,7 @@ export const MinesGame = () => {
                 disabled={revealedCount === 0 || isLoading}
                 className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>Olish ({Math.floor(betAmount * currentMultiplier)})</>
-                )}
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Olish ({Math.floor(betAmount * currentMultiplier)})</>}
               </motion.button>
             </div>
           )}
@@ -374,28 +384,17 @@ export const MinesGame = () => {
               <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center ${
                 won ? 'bg-gradient-to-br from-green-400 to-emerald-600' : 'bg-gradient-to-br from-red-400 to-rose-600'
               }`}>
-                {won ? (
-                  <Diamond className="w-10 h-10 text-white" />
-                ) : (
-                  <Bomb className="w-10 h-10 text-white" />
-                )}
+                {won ? <Diamond className="w-10 h-10 text-white" /> : <Bomb className="w-10 h-10 text-white" />}
               </div>
 
               <div>
-                <p className="text-lg text-muted-foreground">
-                  {won ? '🎉 Tabriklaymiz!' : '💥 Bomba!'}
-                </p>
-                <p className="text-3xl font-black mt-2 text-foreground">
-                  {won ? `+${finalWin} Tanga` : "Yutkizdingiz"}
-                </p>
+                <p className="text-lg text-muted-foreground">{won ? '🎉 Tabriklaymiz!' : '💥 Bomba!'}</p>
+                <p className="text-3xl font-black mt-2 text-foreground">{won ? `+${finalWin} Tanga` : "Yutkizdingiz"}</p>
               </div>
 
               <motion.button
                 whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  setShowResult(false);
-                  resetGame();
-                }}
+                onClick={() => { setShowResult(false); resetGame(); }}
                 className={`w-full py-4 rounded-2xl text-white font-bold ${
                   won ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-red-500 to-rose-600'
                 }`}
