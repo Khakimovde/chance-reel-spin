@@ -49,6 +49,7 @@ interface GameState {
   
   // Actions
   addCoins: (amount: number) => void;
+  removeCoins: (amount: number) => void;
   addReferral: () => void;
   addWinnings: (amount: number) => void;
   selectNumber: (num: number) => void;
@@ -168,6 +169,7 @@ export const useGameStore = create<GameState>()(
       pendingParticipation: null,
 
       addCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
+      removeCoins: (amount) => set((state) => ({ coins: Math.max(0, state.coins - amount) })),
       addReferral: () => set((state) => ({ referralCount: state.referralCount + 1 })),
       addWinnings: (amount) => set((state) => ({ 
         totalWinnings: state.totalWinnings + amount,
