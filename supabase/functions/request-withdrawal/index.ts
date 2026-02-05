@@ -37,7 +37,7 @@ serve(async (req) => {
   }
   
   try {
-    const { telegramId, amount, walletAddress } = await req.json();
+    const { telegramId, amount, walletAddress, username, firstName } = await req.json();
     
     if (!telegramId || !amount) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -76,6 +76,9 @@ serve(async (req) => {
         amount,
         wallet_address: walletAddress || null,
         status: "pending",
+        telegram_id: telegramId,
+        username: username || user.username || null,
+        first_name: firstName || user.first_name || null,
       })
       .select()
       .single();

@@ -32,6 +32,9 @@ interface Withdrawal {
   wallet_address: string | null;
   created_at: string;
   processed_at: string | null;
+  telegram_id: number | null;
+  username: string | null;
+  first_name: string | null;
   user?: {
     first_name: string | null;
     last_name: string | null;
@@ -193,15 +196,45 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
 
   const fetchData = async () => {
     try {
-      // Fetch all users for stats
-      const { data: users, error: usersError } = await supabase
+      // Use COUNT to get total users (avoids 1000 row limit)
+      const { count: totalUsersCount, error: countError } = await supabase
         .from('users')
-        .select('*');
-
-      if (usersError) throw usersError;
+        .select('*', { count: 'exact', head: true });
+      
+      if (countError) throw countError;
+      
+      // Get today's new users count
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { count: todayUsersCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', todayStart.toISOString());
+      
+      // Get total coins in system (need to fetch all for sum)
+      // Use range to fetch in batches if over 1000
+      let allCoins = 0;
+      let offset = 0;
+      const batchSize = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data: coinsBatch } = await supabase
+          .from('users')
+          .select('coins')
+          .range(offset, offset + batchSize - 1);
+        
+        if (coinsBatch && coinsBatch.length > 0) {
+          allCoins += coinsBatch.reduce((sum, u) => sum + (u.coins || 0), 0);
+          offset += batchSize;
+          if (coinsBatch.length < batchSize) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
 
       // Fetch all withdrawals with user info
-      const { data: withdrawalsData, error: withdrawalsError } = await supabase
+      const { data: withdrawalsData, error: withdrawalsError } = await supabase 
         .from('withdrawals')
         .select('*')
         .order('created_at', { ascending: false });
@@ -226,27 +259,12 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       const today = new Date().toISOString().split('T')[0];
       const todayStats = allDailyStats?.find(d => d.date === today);
       
-      const totalCoinsInSystem = users?.reduce((sum, u) => sum + (u.coins || 0), 0) || 0;
-      
-      // Today's new users
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayUsers = users?.filter(u => new Date(u.created_at) >= todayStart).length || 0;
-      
-      // Get users who have user data for withdrawals
-      const usersMap = new Map(users?.map(u => [u.id, u]) || []);
-      
-      const enrichedWithdrawals = withdrawalsData?.map(w => ({
-        ...w,
-        user: usersMap.get(w.user_id)
-      })) || [];
-
       const pendingWithdrawals = withdrawalsData?.filter(w => w.status === 'pending').length || 0;
       const totalWithdrawalsAmount = withdrawalsData?.filter(w => w.status === 'paid').reduce((sum, w) => sum + w.amount, 0) || 0;
 
       setStats({
-        totalUsers: users?.length || 0,
-        todayUsers,
+        totalUsers: totalUsersCount || 0,
+        todayUsers: todayUsersCount || 0,
         totalAdsWatched: totalAdsFromStats,
         todayAdsWatched: todayStats?.ads_watched || 0,
         totalWheelSpins: totalWheelFromStats,
@@ -255,10 +273,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         todayGamesPlayed: todayStats?.games_played || 0,
         pendingWithdrawals,
         totalWithdrawalsAmount,
-        totalCoinsInSystem,
+        totalCoinsInSystem: allCoins,
       });
 
-      setWithdrawals(enrichedWithdrawals);
+      setWithdrawals(withdrawalsData || []);
     } catch (error) {
       console.error('Error fetching admin data:', error);
     } finally {
@@ -690,13 +708,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-semibold text-foreground">
-                          {withdrawal.user?.first_name} {withdrawal.user?.last_name}
+                          {withdrawal.first_name || withdrawal.user?.first_name || 'Ism yo\'q'}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          @{withdrawal.user?.username || 'username yo\'q'} • ID: {withdrawal.user?.telegram_id}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Joriy balans: {withdrawal.user?.coins?.toLocaleString() || 0} tanga
+                          @{withdrawal.username || withdrawal.user?.username || 'username yo\'q'} • ID: {withdrawal.telegram_id || withdrawal.user?.telegram_id || 'yo\'q'}
                         </p>
                       </div>
                       {getStatusBadge(withdrawal.status)}

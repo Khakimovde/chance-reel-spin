@@ -298,31 +298,40 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          first_name: string | null
           id: string
           processed_at: string | null
           rejection_reason: string | null
           status: string
+          telegram_id: number | null
           user_id: string
+          username: string | null
           wallet_address: string | null
         }
         Insert: {
           amount: number
           created_at?: string
+          first_name?: string | null
           id?: string
           processed_at?: string | null
           rejection_reason?: string | null
           status?: string
+          telegram_id?: number | null
           user_id: string
+          username?: string | null
           wallet_address?: string | null
         }
         Update: {
           amount?: number
           created_at?: string
+          first_name?: string | null
           id?: string
           processed_at?: string | null
           rejection_reason?: string | null
           status?: string
+          telegram_id?: number | null
           user_id?: string
+          username?: string | null
           wallet_address?: string | null
         }
         Relationships: [
