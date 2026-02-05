@@ -49,6 +49,93 @@ async function editTelegramMessage(chatId: string | number, messageId: number, t
   });
 }
 
+async function handleUsersCommand(message: any) {
+  const adminId = message.from.id;
+  
+  // Check if admin
+  if (String(adminId) !== TELEGRAM_ADMIN_ID) {
+    console.log(`[USERS] Unauthorized access attempt by ${adminId}`);
+    return;
+  }
+  
+  console.log(`[USERS] Admin ${adminId} requesting users list`);
+  
+  try {
+    // Get total count using COUNT (avoids 1000 row limit)
+    const { count: totalCount } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true });
+    
+    // Get top 50 users by coins
+    const { data: topUsers, error } = await supabase
+      .from("users")
+      .select("telegram_id, username, first_name, last_name, coins, referral_count, created_at")
+      .order("coins", { ascending: false })
+      .limit(50);
+    
+    if (error) {
+      console.error("[USERS] Error fetching users:", error);
+      await sendTelegramMessage(adminId, "❌ Foydalanuvchilarni olishda xatolik");
+      return;
+    }
+    
+    // Get today's new users count
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const { count: todayCount } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", today.toISOString());
+    
+    // Get total coins in system (batch fetch to avoid 1000 limit)
+    let totalCoins = 0;
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data: coinsBatch } = await supabase
+        .from("users")
+        .select("coins")
+        .range(offset, offset + batchSize - 1);
+      
+      if (coinsBatch && coinsBatch.length > 0) {
+        totalCoins += coinsBatch.reduce((sum: number, u: any) => sum + (u.coins || 0), 0);
+        offset += batchSize;
+        if (coinsBatch.length < batchSize) hasMore = false;
+      } else {
+        hasMore = false;
+      }
+    }
+    
+    // Format message
+    let msg = `📊 <b>Foydalanuvchilar statistikasi</b>\n\n`;
+    msg += `👥 Jami foydalanuvchilar: <b>${totalCount?.toLocaleString() || 0}</b>\n`;
+    msg += `🆕 Bugun qo'shilgan: <b>${todayCount || 0}</b>\n`;
+    msg += `💰 Tizimdagi jami tangalar: <b>${totalCoins.toLocaleString()}</b>\n\n`;
+    
+    msg += `🏆 <b>Top 50 foydalanuvchi (tangalar bo'yicha):</b>\n\n`;
+    
+    topUsers?.forEach((user: any, index: number) => {
+      const name = user.first_name || user.username || "Ism yo'q";
+      const uname = user.username ? `@${user.username}` : "";
+      msg += `${index + 1}. ${name} ${uname}\n`;
+      msg += `   🆔 ${user.telegram_id} | 💰 ${user.coins} | 👥 ${user.referral_count} ref\n`;
+    });
+    
+    // Telegram has 4096 char limit
+    if (msg.length > 4000) {
+      msg = msg.substring(0, 3900) + "\n\n... (davomi cheklov sababli qisqartirildi)";
+    }
+    
+    await sendTelegramMessage(adminId, msg);
+    console.log(`[USERS] Sent users list to admin`);
+  } catch (err) {
+    console.error("[USERS] Error:", err);
+    await sendTelegramMessage(adminId, "❌ Xatolik yuz berdi");
+  }
+}
+
 async function handleStart(message: any) {
   const telegramId = message.from.id;
   const firstName = message.from.first_name || "";
@@ -394,6 +481,10 @@ serve(async (req) => {
       
       if (text.startsWith("/start")) {
         await handleStart(message);
+      }
+      
+      if (text === "/users") {
+        await handleUsersCommand(message);
       }
     }
     
