@@ -35,13 +35,7 @@ interface Withdrawal {
   telegram_id: number | null;
   username: string | null;
   first_name: string | null;
-  user?: {
-    first_name: string | null;
-    last_name: string | null;
-    username: string | null;
-    telegram_id: number;
-    coins: number;
-  };
+  user_current_coins?: number;
 }
 
 interface RequiredChannel {
@@ -233,13 +227,30 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         }
       }
 
-      // Fetch all withdrawals with user info
+      // Fetch all withdrawals
       const { data: withdrawalsData, error: withdrawalsError } = await supabase 
         .from('withdrawals')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (withdrawalsError) throw withdrawalsError;
+
+      // Fetch user balances for each withdrawal using telegram_id
+      const withdrawalsWithBalance = await Promise.all(
+        (withdrawalsData || []).map(async (w) => {
+          if (w.telegram_id) {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('coins')
+              .eq('telegram_id', w.telegram_id)
+              .maybeSingle();
+            return { ...w, user_current_coins: userData?.coins || 0 };
+          }
+          return { ...w, user_current_coins: 0 };
+        })
+      );
+
+      // Use withdrawalsWithBalance instead of withdrawalsData
 
       // Fetch game history count
       const { count: gamesCount } = await supabase
@@ -276,7 +287,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         totalCoinsInSystem: allCoins,
       });
 
-      setWithdrawals(withdrawalsData || []);
+      setWithdrawals(withdrawalsWithBalance || []);
     } catch (error) {
       console.error('Error fetching admin data:', error);
     } finally {
@@ -708,10 +719,13 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-semibold text-foreground">
-                          {withdrawal.first_name || withdrawal.user?.first_name || 'Ism yo\'q'}
+                          {withdrawal.first_name || 'Ism yo\'q'}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          @{withdrawal.username || withdrawal.user?.username || 'username yo\'q'} • ID: {withdrawal.telegram_id || withdrawal.user?.telegram_id || 'yo\'q'}
+                          {withdrawal.username ? `@${withdrawal.username}` : 'username yo\'q'} • ID: <code className="bg-muted px-1 rounded">{withdrawal.telegram_id || 'yo\'q'}</code>
+                        </p>
+                        <p className="text-[10px] text-blue-600 mt-0.5">
+                          💰 Joriy balans: <strong>{(withdrawal.user_current_coins || 0).toLocaleString()}</strong> tanga
                         </p>
                       </div>
                       {getStatusBadge(withdrawal.status)}
