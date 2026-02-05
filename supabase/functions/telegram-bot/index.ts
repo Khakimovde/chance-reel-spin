@@ -51,10 +51,15 @@ async function editTelegramMessage(chatId: string | number, messageId: number, t
 
 async function handleUsersCommand(message: any) {
   const adminId = message.from.id;
+  const configuredAdminId = TELEGRAM_ADMIN_ID;
   
-  // Check if admin
-  if (String(adminId) !== TELEGRAM_ADMIN_ID) {
+  console.log(`[USERS] Received /users command from ${adminId}, configured admin ID: "${configuredAdminId}"`);
+  console.log(`[USERS] Comparison: String(${adminId}) === "${configuredAdminId}" = ${String(adminId) === configuredAdminId}`);
+  
+  // Check if admin - compare as strings
+  if (String(adminId) !== String(configuredAdminId)) {
     console.log(`[USERS] Unauthorized access attempt by ${adminId}`);
+    await sendTelegramMessage(adminId, "⛔ Sizda admin huquqi yo'q");
     return;
   }
   
@@ -62,20 +67,24 @@ async function handleUsersCommand(message: any) {
   
   try {
     // Get total count using COUNT (avoids 1000 row limit)
-    const { count: totalCount } = await supabase
+    const { count: totalCount, error: countError } = await supabase
       .from("users")
       .select("*", { count: "exact", head: true });
+    
+    if (countError) {
+      console.error("[USERS] Count error:", countError);
+    }
     
     // Get top 50 users by coins
     const { data: topUsers, error } = await supabase
       .from("users")
-      .select("telegram_id, username, first_name, last_name, coins, referral_count, created_at")
+      .select("telegram_id, username, first_name, last_name, coins, referral_count, tickets, total_winnings, task_watch_ad, task_invite_friend, created_at")
       .order("coins", { ascending: false })
       .limit(50);
     
     if (error) {
       console.error("[USERS] Error fetching users:", error);
-      await sendTelegramMessage(adminId, "❌ Foydalanuvchilarni olishda xatolik");
+      await sendTelegramMessage(adminId, "❌ Foydalanuvchilarni olishda xatolik: " + error.message);
       return;
     }
     
@@ -114,13 +123,15 @@ async function handleUsersCommand(message: any) {
     msg += `🆕 Bugun qo'shilgan: <b>${todayCount || 0}</b>\n`;
     msg += `💰 Tizimdagi jami tangalar: <b>${totalCoins.toLocaleString()}</b>\n\n`;
     
-    msg += `🏆 <b>Top 50 foydalanuvchi (tangalar bo'yicha):</b>\n\n`;
+    msg += `🏆 <b>Top 50 foydalanuvchi:</b>\n\n`;
     
     topUsers?.forEach((user: any, index: number) => {
-      const name = user.first_name || user.username || "Ism yo'q";
+      const name = user.first_name || user.username || "Nomsiz";
       const uname = user.username ? `@${user.username}` : "";
       msg += `${index + 1}. ${name} ${uname}\n`;
-      msg += `   🆔 ${user.telegram_id} | 💰 ${user.coins} | 👥 ${user.referral_count} ref\n`;
+      msg += `   🆔 <code>${user.telegram_id}</code>\n`;
+      msg += `   💰 ${user.coins} | 🎟 ${user.tickets} | 👥 ${user.referral_count} ref\n`;
+      msg += `   🏆 Yutug': ${user.total_winnings} | 📺 Reklama: ${user.task_watch_ad}\n\n`;
     });
     
     // Telegram has 4096 char limit
@@ -129,10 +140,10 @@ async function handleUsersCommand(message: any) {
     }
     
     await sendTelegramMessage(adminId, msg);
-    console.log(`[USERS] Sent users list to admin`);
+    console.log(`[USERS] Sent users list to admin successfully`);
   } catch (err) {
     console.error("[USERS] Error:", err);
-    await sendTelegramMessage(adminId, "❌ Xatolik yuz berdi");
+    await sendTelegramMessage(adminId, "❌ Xatolik yuz berdi: " + (err instanceof Error ? err.message : String(err)));
   }
 }
 
