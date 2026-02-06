@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       daily_stats: {
         Row: {
           ads_watched: number
@@ -111,6 +138,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      game_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          game_id: string
+          game_name: string
+          gradient: string
+          icon: string
+          id: string
+          is_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          game_id: string
+          game_name: string
+          gradient?: string
+          icon?: string
+          id?: string
+          is_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          game_id?: string
+          game_name?: string
+          gradient?: string
+          icon?: string
+          id?: string
+          is_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       referrals: {
         Row: {
@@ -220,6 +283,7 @@ export type Database = {
           created_at: string
           first_name: string | null
           id: string
+          is_blocked: boolean
           last_name: string | null
           last_task_reset: string | null
           last_wheel_spin: string | null
@@ -243,6 +307,7 @@ export type Database = {
           created_at?: string
           first_name?: string | null
           id?: string
+          is_blocked?: boolean
           last_name?: string | null
           last_task_reset?: string | null
           last_wheel_spin?: string | null
@@ -266,6 +331,7 @@ export type Database = {
           created_at?: string
           first_name?: string | null
           id?: string
+          is_blocked?: boolean
           last_name?: string | null
           last_task_reset?: string | null
           last_wheel_spin?: string | null

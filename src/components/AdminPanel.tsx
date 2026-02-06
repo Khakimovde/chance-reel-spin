@@ -19,7 +19,12 @@ import {
   Minus,
   Search,
   Coins,
-  Trash2
+  Trash2,
+  Gamepad2,
+  Settings,
+  Power,
+  Ban,
+  UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { hapticFeedback } from '@/lib/telegram';
@@ -45,6 +50,16 @@ interface RequiredChannel {
   is_active: boolean;
 }
 
+interface GameSetting {
+  id: string;
+  game_id: string;
+  game_name: string;
+  icon: string;
+  is_enabled: boolean;
+  gradient: string;
+  description: string | null;
+}
+
 interface Stats {
   totalUsers: number;
   todayUsers: number;
@@ -63,12 +78,11 @@ interface AdminPanelProps {
   onBack: () => void;
 }
 
-// Constants for withdrawal
-const MIN_WITHDRAWAL = 5000; // 5000 tanga = 10,000 som
+// Default constants (will be overwritten by app_settings)
 const COIN_TO_SOM_RATE = 2; // 1 tanga = 2 som
 
 export const AdminPanel = ({ onBack }: AdminPanelProps) => {
-  const [activeSection, setActiveSection] = useState<'stats' | 'withdrawals' | 'channels' | 'users'>('stats');
+  const [activeSection, setActiveSection] = useState<'stats' | 'withdrawals' | 'channels' | 'users' | 'games' | 'settings'>('stats');
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +96,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [coinAmount, setCoinAmount] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isUpdatingCoins, setIsUpdatingCoins] = useState(false);
+  const [isBlockingUser, setIsBlockingUser] = useState(false);
   
   // Channel management
   const [channels, setChannels] = useState<RequiredChannel[]>([]);
@@ -91,10 +106,21 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [editingChannel, setEditingChannel] = useState<RequiredChannel | null>(null);
   const [editChannelReward, setEditChannelReward] = useState('');
 
+  // Game settings
+  const [games, setGames] = useState<GameSetting[]>([]);
+  const [isTogglingGame, setIsTogglingGame] = useState<string | null>(null);
+
+  // App settings
+  const [minWithdrawal, setMinWithdrawal] = useState(5000);
+  const [newMinWithdrawal, setNewMinWithdrawal] = useState('5000');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
   // Auto-refresh interval
   useEffect(() => {
     fetchData();
     fetchChannels();
+    fetchGames();
+    fetchAppSettings();
     const interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
   }, []);
@@ -111,6 +137,108 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       }
     } catch (error) {
       console.error('Error fetching channels:', error);
+    }
+  };
+
+  const fetchGames = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('game_settings')
+        .select('*')
+        .order('created_at', { ascending: true });
+      
+      if (!error && data) {
+        setGames(data);
+      }
+    } catch (error) {
+      console.error('Error fetching games:', error);
+    }
+  };
+
+  const fetchAppSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('setting_key', 'min_withdrawal')
+        .maybeSingle();
+      
+      if (!error && data) {
+        const value = parseInt(data.setting_value) || 5000;
+        setMinWithdrawal(value);
+        setNewMinWithdrawal(String(value));
+      }
+    } catch (error) {
+      console.error('Error fetching app settings:', error);
+    }
+  };
+
+  const toggleGameEnabled = async (gameId: string, currentEnabled: boolean) => {
+    setIsTogglingGame(gameId);
+    try {
+      const { error } = await supabase
+        .from('game_settings')
+        .update({ is_enabled: !currentEnabled })
+        .eq('game_id', gameId);
+
+      if (error) throw error;
+
+      hapticFeedback('success');
+      toast.success(currentEnabled ? 'O\'yin o\'chirildi' : 'O\'yin yoqildi');
+      await fetchGames();
+    } catch (error) {
+      console.error('Error toggling game:', error);
+      toast.error('Xatolik yuz berdi');
+    } finally {
+      setIsTogglingGame(null);
+    }
+  };
+
+  const saveMinWithdrawal = async () => {
+    const value = parseInt(newMinWithdrawal);
+    if (isNaN(value) || value < 100) {
+      toast.error('Minimal 100 tanga bo\'lishi kerak');
+      return;
+    }
+
+    setIsSavingSettings(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .update({ setting_value: String(value), updated_at: new Date().toISOString() })
+        .eq('setting_key', 'min_withdrawal');
+
+      if (error) throw error;
+
+      setMinWithdrawal(value);
+      hapticFeedback('success');
+      toast.success('Sozlama saqlandi');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Xatolik yuz berdi');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const toggleUserBlock = async (userId: string, currentBlocked: boolean) => {
+    setIsBlockingUser(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_blocked: !currentBlocked })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setFoundUser({ ...foundUser, is_blocked: !currentBlocked });
+      hapticFeedback('success');
+      toast.success(currentBlocked ? 'Foydalanuvchi blokdan chiqarildi' : 'Foydalanuvchi bloklandi');
+    } catch (error) {
+      console.error('Error toggling block:', error);
+      toast.error('Xatolik yuz berdi');
+    } finally {
+      setIsBlockingUser(false);
     }
   };
 
@@ -524,6 +652,17 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
             Kanallar
           </button>
           <button
+            onClick={() => setActiveSection('games')}
+            className={`py-2 px-4 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              activeSection === 'games'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            <Gamepad2 className="w-4 h-4" />
+            AR games
+          </button>
+          <button
             onClick={() => setActiveSection('users')}
             className={`py-2 px-4 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
               activeSection === 'users'
@@ -533,6 +672,17 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
           >
             <Users className="w-4 h-4" />
             Foydalanuvchilar
+          </button>
+          <button
+            onClick={() => setActiveSection('settings')}
+            className={`py-2 px-4 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              activeSection === 'settings'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            Sozlamalar
           </button>
         </div>
       </div>
@@ -663,7 +813,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                 </div>
                 <div className="p-3 bg-blue-50 rounded-xl">
                   <p className="text-xs text-blue-600 mb-1">Minimal yechish miqdori</p>
-                  <p className="text-lg font-bold text-blue-700">{MIN_WITHDRAWAL.toLocaleString()} tanga = {(MIN_WITHDRAWAL * COIN_TO_SOM_RATE).toLocaleString()} so'm</p>
+                  <p className="text-lg font-bold text-blue-700">{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * COIN_TO_SOM_RATE).toLocaleString()} so'm</p>
                 </div>
               </motion.div>
             </motion.div>
@@ -681,7 +831,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
               {/* Info Card */}
               <div className="glass-card p-3 bg-blue-50/50">
                 <p className="text-xs text-blue-700">
-                  💡 Minimal yechish: <strong>{MIN_WITHDRAWAL.toLocaleString()} tanga = {(MIN_WITHDRAWAL * COIN_TO_SOM_RATE).toLocaleString()} so'm</strong>
+                  💡 Minimal yechish: <strong>{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * COIN_TO_SOM_RATE).toLocaleString()} so'm</strong>
                 </p>
               </div>
 
@@ -998,16 +1148,25 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   className="glass-card-elevated p-4 space-y-4"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="w-6 h-6 text-primary" />
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${foundUser.is_blocked ? 'bg-red-100' : 'bg-primary/10'}`}>
+                      {foundUser.is_blocked ? (
+                        <Ban className="w-6 h-6 text-red-500" />
+                      ) : (
+                        <Users className="w-6 h-6 text-primary" />
+                      )}
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-semibold text-foreground">
                         {foundUser.first_name} {foundUser.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         @{foundUser.username || 'username yo\'q'} • ID: {foundUser.telegram_id}
                       </p>
+                      {foundUser.is_blocked && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-red-600 font-medium mt-0.5">
+                          <Ban className="w-3 h-3" /> Bloklangan
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1015,6 +1174,31 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                     <p className="text-xs text-amber-600 mb-1">Joriy balans</p>
                     <p className="text-2xl font-bold text-amber-700">{foundUser.coins?.toLocaleString() || 0} tanga</p>
                   </div>
+
+                  {/* Block/Unblock User */}
+                  <button
+                    onClick={() => toggleUserBlock(foundUser.id, foundUser.is_blocked)}
+                    disabled={isBlockingUser}
+                    className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${
+                      foundUser.is_blocked 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-red-500 text-white'
+                    } disabled:opacity-50`}
+                  >
+                    {isBlockingUser ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : foundUser.is_blocked ? (
+                      <>
+                        <UserCheck className="w-4 h-4" />
+                        Blokdan chiqarish
+                      </>
+                    ) : (
+                      <>
+                        <Ban className="w-4 h-4" />
+                        Bloklash
+                      </>
+                    )}
+                  </button>
 
                   <div className="space-y-3">
                     <label className="text-sm font-medium text-foreground">Tanga miqdori</label>
@@ -1059,6 +1243,118 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   </div>
                 </motion.div>
               )}
+            </motion.div>
+          )}
+
+          {/* AR Games Section */}
+          {activeSection === 'games' && (
+            <motion.div
+              key="games"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="glass-card-elevated p-4 space-y-4">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Gamepad2 className="w-5 h-5 text-purple-500" />
+                  AR games boshqaruvi
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  O'yinlarni yoqish yoki o'chirish. O'chirilgan o'yinlar "Tez orada" deb ko'rsatiladi.
+                </p>
+                
+                <div className="space-y-3">
+                  {games.map((game) => (
+                    <div 
+                      key={game.game_id} 
+                      className={`p-4 rounded-xl border transition-colors ${
+                        game.is_enabled 
+                          ? 'bg-card border-border' 
+                          : 'bg-muted/50 border-muted'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${game.gradient} flex items-center justify-center shadow-lg ${!game.is_enabled ? 'opacity-50' : ''}`}>
+                            <span className="text-xl">{game.icon}</span>
+                          </div>
+                          <div>
+                            <p className={`font-medium ${game.is_enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                              {game.game_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{game.description}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => toggleGameEnabled(game.game_id, game.is_enabled)}
+                          disabled={isTogglingGame === game.game_id}
+                          className={`p-2.5 rounded-xl transition-colors ${
+                            game.is_enabled 
+                              ? 'bg-green-100 text-green-600 hover:bg-green-200' 
+                              : 'bg-red-100 text-red-600 hover:bg-red-200'
+                          }`}
+                        >
+                          {isTogglingGame === game.game_id ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Power className="w-5 h-5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Settings Section */}
+          {activeSection === 'settings' && (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="glass-card-elevated p-4 space-y-4">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-gray-500" />
+                  Umumiy sozlamalar
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground block mb-2">
+                      Minimal pul yechish miqdori (tanga)
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Hozirgi qiymat: <strong>{minWithdrawal.toLocaleString()}</strong> tanga = <strong>{(minWithdrawal * COIN_TO_SOM_RATE).toLocaleString()}</strong> so'm
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={newMinWithdrawal}
+                        onChange={(e) => setNewMinWithdrawal(e.target.value)}
+                        placeholder="5000"
+                        className="flex-1 p-3 rounded-lg border border-border bg-background text-sm"
+                      />
+                      <button
+                        onClick={saveMinWithdrawal}
+                        disabled={isSavingSettings}
+                        className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {isSavingSettings ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          'Saqlash'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
