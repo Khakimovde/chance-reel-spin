@@ -147,6 +147,27 @@ async function handleUsersCommand(message: any) {
   }
 }
 
+async function checkChannelSubscription(telegramId: number, channel: string): Promise<boolean> {
+  try {
+    const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(channel)}&user_id=${telegramId}`;
+    const response = await fetch(telegramUrl);
+    const data = await response.json();
+    
+    if (!data.ok) {
+      console.log(`[SUBSCRIPTION] Check failed for user ${telegramId} in ${channel}:`, data.description);
+      return false;
+    }
+    
+    const status = data.result?.status;
+    const isSubscribed = ["member", "administrator", "creator"].includes(status);
+    console.log(`[SUBSCRIPTION] User ${telegramId} status in ${channel}: ${status} (subscribed: ${isSubscribed})`);
+    return isSubscribed;
+  } catch (err) {
+    console.error("[SUBSCRIPTION] Error:", err);
+    return false;
+  }
+}
+
 async function handleStart(message: any) {
   const telegramId = message.from.id;
   const firstName = message.from.first_name || "";
@@ -159,18 +180,9 @@ async function handleStart(message: any) {
   // Mini app and support bot URLs
   const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
   const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
+  const REQUIRED_CHANNEL = "@LuckyGame_uz";
   
-  // Welcome message with buttons - always shown
-  const welcomeMessage = `👋 Salom, <b>${firstName}</b> 🌿!\n\n🎉 Xush kelibsiz!\n\n🎲 Bepul o'yini omadingizni sinab ko'ring va real daromadga ega bo'ling`;
-  
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: "🎲 Lotoreya", web_app: { url: MINI_APP_URL } }],
-      [{ text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL }],
-    ],
-  };
-  
-  // Check for referral
+  // Check for referral first (before subscription check)
   const text = message.text || "";
   let referredBy: string | null = null;
   let referrerTelegramId: number | null = null;
@@ -204,9 +216,37 @@ async function handleStart(message: any) {
     .eq("telegram_id", telegramId)
     .maybeSingle();
   
+  // Check channel subscription
+  const isSubscribed = await checkChannelSubscription(telegramId, REQUIRED_CHANNEL);
+  
+  if (!isSubscribed) {
+    // Send subscription required message
+    console.log(`[START] User ${telegramId} not subscribed to ${REQUIRED_CHANNEL}`);
+    const subscriptionMessage = `📢 <b>Kanalga obuna bo'ling!</b>\n\n🎁 Lotoreyadan foydalanish uchun avval kanalimizga obuna bo'lishingiz kerak.\n\n👉 <a href="https://t.me/${REQUIRED_CHANNEL.replace('@', '')}">${REQUIRED_CHANNEL}</a>\n\n✅ Obuna bo'lgandan so'ng "Tekshirish" tugmasini bosing.`;
+    
+    const subscriptionKeyboard = {
+      inline_keyboard: [
+        [{ text: "📢 Kanalga o'tish", url: `https://t.me/${REQUIRED_CHANNEL.replace('@', '')}` }],
+        [{ text: "✅ Tekshirish", callback_data: `check_sub_${referredBy || 'none'}_${referrerTelegramId || 'none'}` }],
+      ],
+    };
+    
+    await sendTelegramMessage(telegramId, subscriptionMessage, subscriptionKeyboard);
+    return;
+  }
+  
+  // User is subscribed - proceed with welcome
+  const welcomeMessage = `👋 Salom, <b>${firstName}</b> 🌿!\n\n🎉 Xush kelibsiz!\n\n🎲 Bepul o'yini omadingizni sinab ko'ring va real daromadga ega bo'ling`;
+  
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "🎲 Lotoreya", web_app: { url: MINI_APP_URL } }],
+      [{ text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL }],
+    ],
+  };
+  
   if (existingUser) {
     console.log(`[START] User ${telegramId} already exists, sending welcome message`);
-    // Send welcome message with buttons for existing users
     await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
     return;
   }
@@ -238,110 +278,208 @@ async function handleStart(message: any) {
   
   // If referred, reward the referrer
   if (referredBy && referrerTelegramId) {
-    console.log(`[REFERRAL] Processing referral reward for referrer ${referredBy}`);
-    
-    // Create referral record
-    const { error: refError } = await supabase.from("referrals").insert({
-      referrer_id: referredBy,
-      referred_id: newUser.id,
-    });
-    
-    if (refError) {
-      console.error("[REFERRAL] Error creating referral record:", refError);
-    } else {
-      console.log("[REFERRAL] Referral record created");
-    }
-    
-    // Get referrer's current data
-    const { data: referrerData } = await supabase
-      .from("users")
-      .select("coins, referral_count, task_invite_friend, last_task_reset")
-      .eq("id", referredBy)
-      .single();
-    
-    if (referrerData) {
-      // Profile referral reward: 50 coins (unlimited)
-      const profileReward = 50;
-      const newReferralCount = referrerData.referral_count + 1;
-      
-      console.log(`[REFERRAL] Referrer current stats - coins: ${referrerData.coins}, referral_count: ${referrerData.referral_count}, task_invite_friend: ${referrerData.task_invite_friend}`);
-      
-      // Check if task needs reset first (6-hour reset)
-      const now = new Date();
-      const currentHour = now.getHours();
-      const resetHours = [0, 6, 12, 18];
-      
-      let prevResetHour = 0;
-      for (const h of resetHours) {
-        if (h <= currentHour) {
-          prevResetHour = h;
-        }
-      }
-      
-      const prevResetTime = new Date(now);
-      prevResetTime.setHours(prevResetHour, 0, 0, 0);
-      
-      const lastTaskReset = referrerData.last_task_reset ? new Date(referrerData.last_task_reset) : null;
-      const shouldResetTasks = !lastTaskReset || prevResetTime.getTime() > lastTaskReset.getTime();
-      
-      // Calculate task count after potential reset
-      let currentTaskCount = referrerData.task_invite_friend;
-      if (shouldResetTasks) {
-        currentTaskCount = 0;
-        console.log(`[REFERRAL] Task reset triggered for referrer (6-hour period)`);
-      }
-      
-      // Only increment task_invite_friend if under 2 (max for task period)
-      const newTaskCount = Math.min(currentTaskCount + 1, 2);
-      
-      // Calculate total reward
-      let totalReward = profileReward; // Always give 50 for profile referral
-      let taskBonusGiven = false;
-      
-      // Check if task bonus should be given (when reaching exactly 2 referrals in current task period)
-      if (newTaskCount === 2 && currentTaskCount < 2) {
-        totalReward += 160; // Task bonus: 160 coins for completing 2 invites
-        taskBonusGiven = true;
-        console.log(`[REFERRAL] Task bonus triggered! +160 coins`);
-      }
-      
-      // Update referrer's data
-      const updateData: any = { 
-        coins: referrerData.coins + totalReward,
-        referral_count: newReferralCount,
-        task_invite_friend: newTaskCount
-      };
-      
-      // If reset was needed, also update last_task_reset
-      if (shouldResetTasks) {
-        updateData.last_task_reset = now.toISOString();
-        updateData.task_watch_ad = 0; // Also reset ads
-      }
-      
-      const { error: updateError } = await supabase
-        .from("users")
-        .update(updateData)
-        .eq("id", referredBy);
-      
-      if (updateError) {
-        console.error("[REFERRAL] Error updating referrer:", updateError);
-      } else {
-        console.log(`[REFERRAL] Referrer updated - new coins: ${referrerData.coins + totalReward}, new referral_count: ${newReferralCount}, task_invite_friend: ${newTaskCount}`);
-      }
-      
-      // Notify referrer
-      let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${firstName} sizning havolangiz orqali qo'shildi.\n💰 +${profileReward} tanga qo'shildi!`;
-      if (taskBonusGiven) {
-        notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +160 bonus tanga qo'shildi!`;
-      }
-      notifyMessage += `\n\n📊 Jami referallar: ${newReferralCount}`;
-      
-      await sendTelegramMessage(referrerTelegramId, notifyMessage);
-    }
+    await processReferralReward(referredBy, referrerTelegramId, newUser.id, firstName);
   }
   
   // Send welcome message with buttons
   await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
+}
+
+async function processReferralReward(referrerId: string, referrerTelegramId: number, newUserId: string, newUserName: string) {
+  console.log(`[REFERRAL] Processing referral reward for referrer ${referrerId}`);
+  
+  // Create referral record
+  const { error: refError } = await supabase.from("referrals").insert({
+    referrer_id: referrerId,
+    referred_id: newUserId,
+  });
+  
+  if (refError) {
+    console.error("[REFERRAL] Error creating referral record:", refError);
+  } else {
+    console.log("[REFERRAL] Referral record created");
+  }
+  
+  // Get referrer's current data
+  const { data: referrerData } = await supabase
+    .from("users")
+    .select("coins, referral_count, task_invite_friend, last_task_reset")
+    .eq("id", referrerId)
+    .single();
+  
+  if (referrerData) {
+    // Profile referral reward: 50 coins (unlimited)
+    const profileReward = 50;
+    const newReferralCount = referrerData.referral_count + 1;
+    
+    console.log(`[REFERRAL] Referrer current stats - coins: ${referrerData.coins}, referral_count: ${referrerData.referral_count}, task_invite_friend: ${referrerData.task_invite_friend}`);
+    
+    // Check if task needs reset first (6-hour reset)
+    const now = new Date();
+    const currentHour = now.getHours();
+    const resetHours = [0, 6, 12, 18];
+    
+    let prevResetHour = 0;
+    for (const h of resetHours) {
+      if (h <= currentHour) {
+        prevResetHour = h;
+      }
+    }
+    
+    const prevResetTime = new Date(now);
+    prevResetTime.setHours(prevResetHour, 0, 0, 0);
+    
+    const lastTaskReset = referrerData.last_task_reset ? new Date(referrerData.last_task_reset) : null;
+    const shouldResetTasks = !lastTaskReset || prevResetTime.getTime() > lastTaskReset.getTime();
+    
+    // Calculate task count after potential reset
+    let currentTaskCount = referrerData.task_invite_friend;
+    if (shouldResetTasks) {
+      currentTaskCount = 0;
+      console.log(`[REFERRAL] Task reset triggered for referrer (6-hour period)`);
+    }
+    
+    // Only increment task_invite_friend if under 2 (max for task period)
+    const newTaskCount = Math.min(currentTaskCount + 1, 2);
+    
+    // Calculate total reward
+    let totalReward = profileReward; // Always give 50 for profile referral
+    let taskBonusGiven = false;
+    
+    // Check if task bonus should be given (when reaching exactly 2 referrals in current task period)
+    if (newTaskCount === 2 && currentTaskCount < 2) {
+      totalReward += 160; // Task bonus: 160 coins for completing 2 invites
+      taskBonusGiven = true;
+      console.log(`[REFERRAL] Task bonus triggered! +160 coins`);
+    }
+    
+    // Update referrer's data
+    const updateData: any = { 
+      coins: referrerData.coins + totalReward,
+      referral_count: newReferralCount,
+      task_invite_friend: newTaskCount
+    };
+    
+    // If reset was needed, also update last_task_reset
+    if (shouldResetTasks) {
+      updateData.last_task_reset = now.toISOString();
+      updateData.task_watch_ad = 0; // Also reset ads
+    }
+    
+    const { error: updateError } = await supabase
+      .from("users")
+      .update(updateData)
+      .eq("id", referrerId);
+    
+    if (updateError) {
+      console.error("[REFERRAL] Error updating referrer:", updateError);
+    } else {
+      console.log(`[REFERRAL] Referrer updated - new coins: ${referrerData.coins + totalReward}, new referral_count: ${newReferralCount}, task_invite_friend: ${newTaskCount}`);
+    }
+    
+    // Notify referrer
+    let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${newUserName} sizning havolangiz orqali qo'shildi.\n💰 +${profileReward} tanga qo'shildi!`;
+    if (taskBonusGiven) {
+      notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +160 bonus tanga qo'shildi!`;
+    }
+    notifyMessage += `\n\n📊 Jami referallar: ${newReferralCount}`;
+    
+    await sendTelegramMessage(referrerTelegramId, notifyMessage);
+  }
+}
+
+async function handleSubscriptionCheck(callbackQuery: any) {
+  const telegramId = callbackQuery.from.id;
+  const messageId = callbackQuery.message?.message_id;
+  const data = callbackQuery.data;
+  const firstName = callbackQuery.from.first_name || "";
+  const lastName = callbackQuery.from.last_name || "";
+  const username = callbackQuery.from.username || "";
+  
+  console.log(`[SUBSCRIPTION CHECK] User ${telegramId} checking subscription`);
+  
+  const REQUIRED_CHANNEL = "@LuckyGame_uz";
+  const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
+  const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
+  
+  // Parse referral info from callback data
+  const parts = data.split("_");
+  const referrerId = parts[2] !== 'none' ? parts[2] : null;
+  const referrerTelegramId = parts[3] !== 'none' ? parseInt(parts[3]) : null;
+  
+  const isSubscribed = await checkChannelSubscription(telegramId, REQUIRED_CHANNEL);
+  
+  if (!isSubscribed) {
+    // Still not subscribed
+    console.log(`[SUBSCRIPTION CHECK] User ${telegramId} still not subscribed`);
+    await sendTelegramMessage(telegramId, "❌ Siz hali kanalga obuna bo'lmagansiz!\n\n📢 Iltimos, avval kanalga obuna bo'ling va qaytadan tekshiring.");
+    return;
+  }
+  
+  // User is now subscribed!
+  console.log(`[SUBSCRIPTION CHECK] User ${telegramId} is now subscribed!`);
+  
+  // Check if user exists
+  const { data: existingUser } = await supabase
+    .from("users")
+    .select("*")
+    .eq("telegram_id", telegramId)
+    .maybeSingle();
+  
+  const welcomeMessage = `🎉 <b>Tabriklaymiz!</b>\n\n✅ Obuna tasdiqlandi!\n\n👋 Xush kelibsiz, <b>${firstName}</b>!\n\n🎲 Endi o'yinlardan foydalanishingiz mumkin!`;
+  
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "🎲 Lotoreya", web_app: { url: MINI_APP_URL } }],
+      [{ text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL }],
+    ],
+  };
+  
+  if (existingUser) {
+    // User already exists, just update message
+    if (messageId) {
+      await editTelegramMessage(telegramId, messageId, welcomeMessage, keyboard);
+    } else {
+      await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
+    }
+    return;
+  }
+  
+  // Create new user
+  console.log(`[SUBSCRIPTION CHECK] Creating new user ${telegramId}`);
+  const { data: newUser, error } = await supabase
+    .from("users")
+    .insert({
+      telegram_id: telegramId,
+      first_name: firstName,
+      last_name: lastName,
+      username,
+      coins: 300,
+      tickets: 3,
+      referred_by: referrerId,
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    console.error("[SUBSCRIPTION CHECK] Error creating user:", error);
+    await sendTelegramMessage(telegramId, "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring.");
+    return;
+  }
+  
+  console.log(`[SUBSCRIPTION CHECK] User ${telegramId} created with id: ${newUser.id}`);
+  
+  // Process referral if exists
+  if (referrerId && referrerTelegramId) {
+    await processReferralReward(referrerId, referrerTelegramId, newUser.id, firstName);
+  }
+  
+  // Update message with welcome
+  if (messageId) {
+    await editTelegramMessage(telegramId, messageId, welcomeMessage, keyboard);
+  } else {
+    await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
+  }
 }
 
 async function handleWithdrawalAction(callbackQuery: any) {
@@ -500,7 +638,12 @@ serve(async (req) => {
     }
     
     if (body.callback_query) {
-      await handleWithdrawalAction(body.callback_query);
+      const callbackData = body.callback_query.data || "";
+      if (callbackData.startsWith("check_sub_")) {
+        await handleSubscriptionCheck(body.callback_query);
+      } else {
+        await handleWithdrawalAction(body.callback_query);
+      }
     }
     
     return new Response(JSON.stringify({ ok: true }), {

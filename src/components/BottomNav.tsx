@@ -8,7 +8,7 @@ interface BottomNavProps {
 
 const tabs = [
   { id: 'lottery', label: 'O\'yin', icon: Gamepad2 },
-  { id: 'wheel', label: "G'ildirak", icon: Gift },
+  { id: 'wheel', label: 'AR games', icon: Gift },
   { id: 'mystery', label: 'Vazifalar', icon: ListTodo },
   { id: 'history', label: 'Tarix', icon: History },
   { id: 'profile', label: 'Profil', icon: User },
