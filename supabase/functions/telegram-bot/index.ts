@@ -182,30 +182,15 @@ async function handleStart(message: any) {
   const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
   const REQUIRED_CHANNEL = "@LuckyGame_uz";
   
-  // Check for referral first (before subscription check)
+  // Parse referral info from /start command
   const text = message.text || "";
-  let referredBy: string | null = null;
-  let referrerTelegramId: number | null = null;
+  let refTelegramId: string | null = null;
   
   if (text.includes("ref_")) {
     const refId = text.split("ref_")[1]?.split(" ")[0];
-    console.log(`[REFERRAL] Found referral code: ref_${refId}`);
-    
     if (refId && refId !== String(telegramId)) {
-      // Find referrer by telegram_id
-      const { data: referrer } = await supabase
-        .from("users")
-        .select("id, telegram_id, coins, referral_count, task_invite_friend")
-        .eq("telegram_id", parseInt(refId))
-        .maybeSingle();
-      
-      if (referrer) {
-        console.log(`[REFERRAL] Found referrer: ${referrer.id} (telegram_id: ${referrer.telegram_id})`);
-        referredBy = referrer.id;
-        referrerTelegramId = referrer.telegram_id;
-      } else {
-        console.log(`[REFERRAL] Referrer with telegram_id ${refId} not found`);
-      }
+      refTelegramId = refId;
+      console.log(`[REFERRAL] Found referral telegram_id: ${refTelegramId}`);
     }
   }
   
@@ -216,18 +201,19 @@ async function handleStart(message: any) {
     .eq("telegram_id", telegramId)
     .maybeSingle();
   
-  // Check channel subscription
+  // ALWAYS check channel subscription first
   const isSubscribed = await checkChannelSubscription(telegramId, REQUIRED_CHANNEL);
   
   if (!isSubscribed) {
-    // Send subscription required message
+    // Not subscribed - show subscription required message
+    // Pass refTelegramId so we can process referral AFTER subscription is confirmed
     console.log(`[START] User ${telegramId} not subscribed to ${REQUIRED_CHANNEL}`);
     const subscriptionMessage = `📢 <b>Kanalga obuna bo'ling!</b>\n\n🎁 Lotoreyadan foydalanish uchun avval kanalimizga obuna bo'lishingiz kerak.\n\n👉 <a href="https://t.me/${REQUIRED_CHANNEL.replace('@', '')}">${REQUIRED_CHANNEL}</a>\n\n✅ Obuna bo'lgandan so'ng "Tekshirish" tugmasini bosing.`;
     
     const subscriptionKeyboard = {
       inline_keyboard: [
         [{ text: "📢 Kanalga o'tish", url: `https://t.me/${REQUIRED_CHANNEL.replace('@', '')}` }],
-        [{ text: "✅ Tekshirish", callback_data: `check_sub_${referredBy || 'none'}_${referrerTelegramId || 'none'}` }],
+        [{ text: "✅ Tekshirish", callback_data: `check_sub_reftg_${refTelegramId || 'none'}` }],
       ],
     };
     
@@ -235,7 +221,7 @@ async function handleStart(message: any) {
     return;
   }
   
-  // User is subscribed - proceed with welcome
+  // User IS subscribed - proceed
   const welcomeMessage = `👋 Salom, <b>${firstName}</b> 🌿!\n\n🎉 Xush kelibsiz!\n\n🎲 Bepul o'yini omadingizni sinab ko'ring va real daromadga ega bo'ling`;
   
   const keyboard = {
@@ -251,6 +237,24 @@ async function handleStart(message: any) {
     return;
   }
   
+  // New user - resolve referrer if present
+  let referredBy: string | null = null;
+  let referrerTelegramId: number | null = null;
+  
+  if (refTelegramId) {
+    const { data: referrer } = await supabase
+      .from("users")
+      .select("id, telegram_id")
+      .eq("telegram_id", parseInt(refTelegramId))
+      .maybeSingle();
+    
+    if (referrer) {
+      referredBy = referrer.id;
+      referrerTelegramId = referrer.telegram_id;
+      console.log(`[REFERRAL] Resolved referrer: ${referrer.id}`);
+    }
+  }
+  
   // Create new user with 300 coins welcome bonus
   console.log(`[START] Creating new user ${telegramId}`);
   const { data: newUser, error } = await supabase
@@ -261,7 +265,7 @@ async function handleStart(message: any) {
       last_name: lastName,
       username,
       photo_url: photoUrl,
-      coins: 300, // Welcome bonus: 300 coins
+      coins: 300,
       tickets: 3,
       referred_by: referredBy,
     })
@@ -276,7 +280,7 @@ async function handleStart(message: any) {
   
   console.log(`[START] User ${telegramId} created successfully with id: ${newUser.id}`);
   
-  // If referred, reward the referrer
+  // Process referral reward (user already passed subscription check)
   if (referredBy && referrerTelegramId) {
     await processReferralReward(referredBy, referrerTelegramId, newUser.id, firstName);
   }
@@ -314,10 +318,10 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
     
     console.log(`[REFERRAL] Referrer current stats - coins: ${referrerData.coins}, referral_count: ${referrerData.referral_count}, task_invite_friend: ${referrerData.task_invite_friend}`);
     
-    // Check if task needs reset first (6-hour reset)
+  // Check if task needs reset first (2-hour reset)
     const now = new Date();
     const currentHour = now.getHours();
-    const resetHours = [0, 6, 12, 18];
+    const resetHours = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
     
     let prevResetHour = 0;
     for (const h of resetHours) {
@@ -336,7 +340,7 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
     let currentTaskCount = referrerData.task_invite_friend;
     if (shouldResetTasks) {
       currentTaskCount = 0;
-      console.log(`[REFERRAL] Task reset triggered for referrer (6-hour period)`);
+      console.log(`[REFERRAL] Task reset triggered for referrer (2-hour period)`);
     }
     
     // Only increment task_invite_friend if under 2 (max for task period)
@@ -402,10 +406,10 @@ async function handleSubscriptionCheck(callbackQuery: any) {
   const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
   const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
   
-  // Parse referral info from callback data
+  // Parse referral telegram_id from callback data: check_sub_reftg_<telegram_id>
   const parts = data.split("_");
-  const referrerId = parts[2] !== 'none' ? parts[2] : null;
-  const referrerTelegramId = parts[3] !== 'none' ? parseInt(parts[3]) : null;
+  // Format: check_sub_reftg_<telegramId>
+  const refTelegramIdStr = parts[3] !== 'none' ? parts[3] : null;
   
   const isSubscribed = await checkChannelSubscription(telegramId, REQUIRED_CHANNEL);
   
@@ -445,6 +449,24 @@ async function handleSubscriptionCheck(callbackQuery: any) {
     return;
   }
   
+  // Resolve referrer from telegram_id
+  let referredBy: string | null = null;
+  let referrerTelegramId: number | null = null;
+  
+  if (refTelegramIdStr) {
+    const { data: referrer } = await supabase
+      .from("users")
+      .select("id, telegram_id")
+      .eq("telegram_id", parseInt(refTelegramIdStr))
+      .maybeSingle();
+    
+    if (referrer) {
+      referredBy = referrer.id;
+      referrerTelegramId = referrer.telegram_id;
+      console.log(`[SUBSCRIPTION CHECK] Resolved referrer: ${referrer.id} (tg: ${referrer.telegram_id})`);
+    }
+  }
+  
   // Create new user
   console.log(`[SUBSCRIPTION CHECK] Creating new user ${telegramId}`);
   const { data: newUser, error } = await supabase
@@ -456,7 +478,7 @@ async function handleSubscriptionCheck(callbackQuery: any) {
       username,
       coins: 300,
       tickets: 3,
-      referred_by: referrerId,
+      referred_by: referredBy,
     })
     .select()
     .single();
@@ -469,9 +491,9 @@ async function handleSubscriptionCheck(callbackQuery: any) {
   
   console.log(`[SUBSCRIPTION CHECK] User ${telegramId} created with id: ${newUser.id}`);
   
-  // Process referral if exists
-  if (referrerId && referrerTelegramId) {
-    await processReferralReward(referrerId, referrerTelegramId, newUser.id, firstName);
+  // Process referral reward - user has passed subscription check
+  if (referredBy && referrerTelegramId) {
+    await processReferralReward(referredBy, referrerTelegramId, newUser.id, firstName);
   }
   
   // Update message with welcome

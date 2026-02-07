@@ -90,12 +90,12 @@ export const getTimeUntilNextDraw = (): number => {
   return Math.max(0, nextSlot - now);
 };
 
-// Fixed-time reset logic (00:00, 06:00, 12:00, 18:00 local time)
+// Fixed-time reset logic (every 2 hours: 00:00, 02:00, 04:00, ..., 22:00)
 const getNextFixedResetTime = (): Date => {
   const now = new Date();
   const currentHour = now.getHours();
   
-  const resetHours = [0, 6, 12, 18];
+  const resetHours = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
   let nextResetHour = resetHours.find(h => h > currentHour);
   
   const nextReset = new Date(now);
@@ -115,7 +115,7 @@ const getPreviousFixedResetTime = (): Date => {
   const now = new Date();
   const currentHour = now.getHours();
   
-  const resetHours = [0, 6, 12, 18];
+  const resetHours = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
   
   let prevResetHour = 0;
   for (const h of resetHours) {

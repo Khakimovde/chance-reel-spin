@@ -78,8 +78,8 @@ interface AdminPanelProps {
   onBack: () => void;
 }
 
-// Default constants (will be overwritten by app_settings)
-const COIN_TO_SOM_RATE = 2; // 1 tanga = 2 som
+// Default fallback (overwritten by app_settings)
+const DEFAULT_COIN_TO_SOM_RATE = 2;
 
 export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [activeSection, setActiveSection] = useState<'stats' | 'withdrawals' | 'channels' | 'users' | 'games' | 'settings'>('stats');
@@ -109,10 +109,16 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   // Game settings
   const [games, setGames] = useState<GameSetting[]>([]);
   const [isTogglingGame, setIsTogglingGame] = useState<string | null>(null);
+  const [editingGame, setEditingGame] = useState<string | null>(null);
+  const [editGameIcon, setEditGameIcon] = useState('');
 
   // App settings
   const [minWithdrawal, setMinWithdrawal] = useState(5000);
   const [newMinWithdrawal, setNewMinWithdrawal] = useState('5000');
+  const [adRewardCoins, setAdRewardCoins] = useState(300);
+  const [newAdRewardCoins, setNewAdRewardCoins] = useState('300');
+  const [coinToSomRate, setCoinToSomRate] = useState(2);
+  const [newCoinToSomRate, setNewCoinToSomRate] = useState('2');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Auto-refresh interval
@@ -159,14 +165,26 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
     try {
       const { data, error } = await supabase
         .from('app_settings')
-        .select('*')
-        .eq('setting_key', 'min_withdrawal')
-        .maybeSingle();
+        .select('*');
       
       if (!error && data) {
-        const value = parseInt(data.setting_value) || 5000;
-        setMinWithdrawal(value);
-        setNewMinWithdrawal(String(value));
+        data.forEach((setting: any) => {
+          if (setting.setting_key === 'min_withdrawal') {
+            const value = parseInt(setting.setting_value) || 5000;
+            setMinWithdrawal(value);
+            setNewMinWithdrawal(String(value));
+          }
+          if (setting.setting_key === 'ad_reward_coins') {
+            const value = parseInt(setting.setting_value) || 300;
+            setAdRewardCoins(value);
+            setNewAdRewardCoins(String(value));
+          }
+          if (setting.setting_key === 'coin_to_som_rate') {
+            const value = parseFloat(setting.setting_value) || 2;
+            setCoinToSomRate(value);
+            setNewCoinToSomRate(String(value));
+          }
+        });
       }
     } catch (error) {
       console.error('Error fetching app settings:', error);
@@ -194,6 +212,25 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
     }
   };
 
+  const updateGameIcon = async (gameId: string, newIcon: string) => {
+    try {
+      const { error } = await supabase
+        .from('game_settings')
+        .update({ icon: newIcon })
+        .eq('game_id', gameId);
+
+      if (error) throw error;
+
+      hapticFeedback('success');
+      toast.success('O\'yin ikonasi yangilandi');
+      setEditingGame(null);
+      await fetchGames();
+    } catch (error) {
+      console.error('Error updating game icon:', error);
+      toast.error('Xatolik yuz berdi');
+    }
+  };
+
   const saveMinWithdrawal = async () => {
     const value = parseInt(newMinWithdrawal);
     if (isNaN(value) || value < 100) {
@@ -215,6 +252,60 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       toast.success('Sozlama saqlandi');
     } catch (error) {
       console.error('Error saving settings:', error);
+      toast.error('Xatolik yuz berdi');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const saveAdRewardCoins = async () => {
+    const value = parseInt(newAdRewardCoins);
+    if (isNaN(value) || value < 1) {
+      toast.error('Minimal 1 tanga bo\'lishi kerak');
+      return;
+    }
+
+    setIsSavingSettings(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .update({ setting_value: String(value), updated_at: new Date().toISOString() })
+        .eq('setting_key', 'ad_reward_coins');
+
+      if (error) throw error;
+
+      setAdRewardCoins(value);
+      hapticFeedback('success');
+      toast.success('Reklama mukofoti saqlandi');
+    } catch (error) {
+      console.error('Error saving ad reward:', error);
+      toast.error('Xatolik yuz berdi');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const saveCoinToSomRate = async () => {
+    const value = parseFloat(newCoinToSomRate);
+    if (isNaN(value) || value <= 0) {
+      toast.error('Musbat son kiriting');
+      return;
+    }
+
+    setIsSavingSettings(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .update({ setting_value: String(value), updated_at: new Date().toISOString() })
+        .eq('setting_key', 'coin_to_som_rate');
+
+      if (error) throw error;
+
+      setCoinToSomRate(value);
+      hapticFeedback('success');
+      toast.success('Valyuta kursi saqlandi');
+    } catch (error) {
+      console.error('Error saving coin rate:', error);
       toast.error('Xatolik yuz berdi');
     } finally {
       setIsSavingSettings(false);
@@ -813,7 +904,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                 </div>
                 <div className="p-3 bg-blue-50 rounded-xl">
                   <p className="text-xs text-blue-600 mb-1">Minimal yechish miqdori</p>
-                  <p className="text-lg font-bold text-blue-700">{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * COIN_TO_SOM_RATE).toLocaleString()} so'm</p>
+                  <p className="text-lg font-bold text-blue-700">{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm</p>
                 </div>
               </motion.div>
             </motion.div>
@@ -831,7 +922,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
               {/* Info Card */}
               <div className="glass-card p-3 bg-blue-50/50">
                 <p className="text-xs text-blue-700">
-                  💡 Minimal yechish: <strong>{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * COIN_TO_SOM_RATE).toLocaleString()} so'm</strong>
+                  💡 Minimal yechish: <strong>{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm</strong>
                 </p>
               </div>
 
@@ -885,7 +976,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       <span className="text-sm text-muted-foreground">Miqdor:</span>
                       <div className="text-right">
                         <span className="font-bold text-foreground">{withdrawal.amount.toLocaleString()} tanga</span>
-                        <span className="text-xs text-muted-foreground block">= {(withdrawal.amount * COIN_TO_SOM_RATE).toLocaleString()} so'm</span>
+                        <span className="text-xs text-muted-foreground block">= {(withdrawal.amount * coinToSomRate).toLocaleString()} so'm</span>
                       </div>
                     </div>
 
@@ -1276,9 +1367,16 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${game.gradient} flex items-center justify-center shadow-lg ${!game.is_enabled ? 'opacity-50' : ''}`}>
+                          <button
+                            onClick={() => {
+                              setEditingGame(game.game_id);
+                              setEditGameIcon(game.icon);
+                            }}
+                            className={`w-12 h-12 rounded-xl bg-gradient-to-br ${game.gradient} flex items-center justify-center shadow-lg ${!game.is_enabled ? 'opacity-50' : ''} hover:ring-2 hover:ring-primary/50 transition-all`}
+                            title="Ikonani o'zgartirish"
+                          >
                             <span className="text-xl">{game.icon}</span>
-                          </div>
+                          </button>
                           <div>
                             <p className={`font-medium ${game.is_enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
                               {game.game_name}
@@ -1302,6 +1400,38 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                           )}
                         </button>
                       </div>
+                      
+                      {/* Icon Edit Mode */}
+                      {editingGame === game.game_id && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="mt-3 pt-3 border-t border-border space-y-2"
+                        >
+                          <label className="text-xs text-muted-foreground">Emoji/Ikon (masalan: 🎡 💣 🎁)</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={editGameIcon}
+                              onChange={(e) => setEditGameIcon(e.target.value)}
+                              placeholder="🎮"
+                              className="flex-1 p-2 rounded-lg border border-border bg-background text-center text-2xl"
+                            />
+                            <button
+                              onClick={() => setEditingGame(null)}
+                              className="px-3 py-2 rounded-lg bg-muted text-muted-foreground text-sm"
+                            >
+                              Bekor
+                            </button>
+                            <button
+                              onClick={() => updateGameIcon(game.game_id, editGameIcon)}
+                              className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
+                            >
+                              Saqlash
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1324,13 +1454,14 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   Umumiy sozlamalar
                 </h3>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Min Withdrawal */}
                   <div>
                     <label className="text-sm font-medium text-foreground block mb-2">
                       Minimal pul yechish miqdori (tanga)
                     </label>
                     <p className="text-xs text-muted-foreground mb-3">
-                      Hozirgi qiymat: <strong>{minWithdrawal.toLocaleString()}</strong> tanga = <strong>{(minWithdrawal * COIN_TO_SOM_RATE).toLocaleString()}</strong> so'm
+                      Hozirgi qiymat: <strong>{minWithdrawal.toLocaleString()}</strong> tanga = <strong>{(minWithdrawal * coinToSomRate).toLocaleString()}</strong> so'm
                     </p>
                     <div className="flex gap-2">
                       <input
@@ -1345,11 +1476,62 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                         disabled={isSavingSettings}
                         className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-50"
                       >
-                        {isSavingSettings ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          'Saqlash'
-                        )}
+                        {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Saqlash'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Ad Reward Coins */}
+                  <div className="pt-4 border-t border-border">
+                    <label className="text-sm font-medium text-foreground block mb-2">
+                      10 ta reklama ko'rish mukofoti (tanga)
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Hozirgi qiymat: <strong>{adRewardCoins}</strong> tanga
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={newAdRewardCoins}
+                        onChange={(e) => setNewAdRewardCoins(e.target.value)}
+                        placeholder="300"
+                        className="flex-1 p-3 rounded-lg border border-border bg-background text-sm"
+                      />
+                      <button
+                        onClick={saveAdRewardCoins}
+                        disabled={isSavingSettings}
+                        className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Saqlash'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Coin to Som Rate */}
+                  <div className="pt-4 border-t border-border">
+                    <label className="text-sm font-medium text-foreground block mb-2">
+                      Valyuta kursi (1 tanga = ? so'm)
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Hozirgi qiymat: 1 tanga = <strong>{coinToSomRate}</strong> so'm
+                      <br />
+                      Misol: {minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={newCoinToSomRate}
+                        onChange={(e) => setNewCoinToSomRate(e.target.value)}
+                        placeholder="2"
+                        className="flex-1 p-3 rounded-lg border border-border bg-background text-sm"
+                      />
+                      <button
+                        onClick={saveCoinToSomRate}
+                        disabled={isSavingSettings}
+                        className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Saqlash'}
                       </button>
                     </div>
                   </div>
