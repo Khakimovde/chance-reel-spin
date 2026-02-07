@@ -55,6 +55,7 @@ export const MysteryTab = () => {
   const [requiredChannels, setRequiredChannels] = useState<RequiredChannel[]>([]);
   const [selectedChannelTask, setSelectedChannelTask] = useState<RequiredChannel | null>(null);
   const [channelSubscriptions, setChannelSubscriptions] = useState<Record<string, boolean>>({});
+  const [adRewardCoins, setAdRewardCoins] = useState(300);
 
   // Helper function to update coins in backend
   const updateCoinsInBackend = async (amount: number, statsType?: string) => {
@@ -128,6 +129,18 @@ export const MysteryTab = () => {
   useEffect(() => {
     loadAdSdk();
     resetTasksIfNeeded();
+    // Fetch ad reward setting
+    const fetchAdReward = async () => {
+      try {
+        const { data } = await supabase
+          .from('app_settings')
+          .select('setting_value')
+          .eq('setting_key', 'ad_reward_coins')
+          .maybeSingle();
+        if (data) setAdRewardCoins(parseInt(data.setting_value) || 300);
+      } catch (e) { /* use default */ }
+    };
+    fetchAdReward();
   }, [resetTasksIfNeeded]);
 
   // Fetch channels and claimed rewards when user changes (including refresh)
@@ -162,7 +175,7 @@ export const MysteryTab = () => {
         : `${taskCompletion.watchAd}/10 ta reklama ko'ring`,
       icon: Play,
       image: '🎬',
-      reward: { type: 'coins', value: 300, label: '300 Tanga' },
+      reward: { type: 'coins', value: adRewardCoins, label: `${adRewardCoins} Tanga` },
       maxCount: 10,
       currentCount: taskCompletion.watchAd,
       completed: taskCompletion.watchAd >= 10,
@@ -270,10 +283,9 @@ export const MysteryTab = () => {
         
         // Only give reward when all 10 are completed
         if (newCount >= 10) {
-          const success = await updateCoinsInBackend(300);
+          const success = await updateCoinsInBackend(adRewardCoins);
           if (success) {
-            // No need to call addCoins - refreshUserData already synced the state
-            toast.success('🎉 10 ta reklama ko\'rildi! +300 tanga qo\'shildi!');
+            toast.success(`🎉 10 ta reklama ko'rildi! +${adRewardCoins} tanga qo'shildi!`);
           }
         } else {
           toast.success(`Reklama ko'rildi! ${newCount}/10`);
