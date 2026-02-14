@@ -5,9 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const WINNER_PERCENT = 0.15;
-const WINNER_REWARD = 23;
-const LOSER_REWARD = 7;
+const WINNER_PERCENT = 0.50;
+const WINNER_REWARD = 20;
+const LOSER_REWARD = 40;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

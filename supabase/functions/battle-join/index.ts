@@ -6,9 +6,9 @@ const corsHeaders = {
 }
 
 const BATTLE_INTERVAL = 30 * 60 * 1000; // 30 minutes
-const WINNER_PERCENT = 0.15;
-const WINNER_REWARD = 23;
-const LOSER_REWARD = 7;
+const WINNER_PERCENT = 0.50;
+const WINNER_REWARD = 20;
+const LOSER_REWARD = 40;
 
 function getCurrentRoundSlot(): { slot: string; time: Date } {
   const now = Date.now();
