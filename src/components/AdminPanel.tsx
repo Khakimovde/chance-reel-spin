@@ -976,7 +976,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                       <span className="text-sm text-muted-foreground">Miqdor:</span>
                       <div className="text-right">
                         <span className="font-bold text-foreground">{withdrawal.amount.toLocaleString()} tanga</span>
-                        <span className="text-xs text-muted-foreground block">= {(withdrawal.amount * coinToSomRate).toLocaleString()} so'm</span>
+                        <span className="text-xs text-muted-foreground block">= {(withdrawal.amount * (new Date(withdrawal.created_at) >= new Date('2026-02-14T00:00:00Z') ? coinToSomRate : 2)).toLocaleString()} so'm</span>
                       </div>
                     </div>
 
