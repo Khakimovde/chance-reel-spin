@@ -9,7 +9,6 @@ import { BattleTimer } from './battle/BattleTimer';
 import { BattleParticipants } from './battle/BattleParticipants';
 import { BattleResultModal } from './battle/BattleResultModal';
 import { BattleHistory } from './battle/BattleHistory';
-import { BattleSelectionAnimation } from './battle/BattleSelectionAnimation';
 
 const BATTLE_INTERVAL = 30 * 60 * 1000;
 
@@ -62,21 +61,28 @@ export const BattleTab = () => {
   const [hasJoined, setHasJoined] = useState(false);
   const [joining, setJoining] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showSelection, setShowSelection] = useState(false);
-  const [selectionParticipants, setSelectionParticipants] = useState<Participant[]>([]);
   const [resultModal, setResultModal] = useState<{ open: boolean; isWinner: boolean; reward: number }>({
     open: false, isWinner: false, reward: 0
   });
 
   const telegramUser = getTelegramUser();
   const shownRoundRef = useRef<string | null>(getShownRound());
-  // Use ref for showSelection to avoid stale closures in callbacks
-  const showSelectionRef = useRef(false);
+  const processingRef = useRef(false);
+
+  // Trigger battle-process when timer ends
+  const triggerProcess = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    try {
+      await supabase.functions.invoke('battle-process', { body: {} });
+    } catch (e) {
+      console.error('battle-process trigger error:', e);
+    } finally {
+      processingRef.current = false;
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
-    // Don't fetch if selection animation is playing
-    if (showSelectionRef.current) return;
-    
     try {
       const currentSlot = getCurrentRoundSlot();
       const prevSlot = getPreviousRoundSlot();
@@ -86,15 +92,12 @@ export const BattleTab = () => {
         supabase.from('battle_rounds').select('*').eq('round_slot', prevSlot).maybeSingle(),
       ]);
 
-      // Double-check animation isn't playing after async
-      if (showSelectionRef.current) return;
-
       const cr = currentRes.data as BattleRound | null;
       const pr = prevRes.data as BattleRound | null;
       setCurrentRound(cr);
 
       if (cr) {
-        const { data } = await supabase.from('battle_participants').select('*').eq('round_id', cr.id);
+        const { data } = await supabase.from('battle_participants').select('*').eq('round_id', cr.id).limit(200);
         const parts = (data || []) as Participant[];
         setParticipants(parts);
         if (telegramUser) {
@@ -105,17 +108,21 @@ export const BattleTab = () => {
         setHasJoined(false);
       }
 
-      // Check last round for result animation
+      // Check last round result - show modal directly (no animation)
       if (pr && pr.status === 'completed' && telegramUser && shownRoundRef.current !== pr.id) {
-        const { data: lastParts } = await supabase.from('battle_participants').select('*').eq('round_id', pr.id);
-        const lp = (lastParts || []) as Participant[];
-        const myResult = lp.find(p => p.telegram_id === telegramUser.id);
-        if (myResult) {
-          shownRoundRef.current = pr.id;
-          setShownRound(pr.id);
-          setSelectionParticipants(lp);
-          showSelectionRef.current = true;
-          setShowSelection(true);
+        // Only fetch MY result, not all participants
+        const { data: myPart } = await supabase
+          .from('battle_participants')
+          .select('is_winner, reward')
+          .eq('round_id', pr.id)
+          .eq('telegram_id', telegramUser.id)
+          .maybeSingle();
+
+        shownRoundRef.current = pr.id;
+        setShownRound(pr.id);
+
+        if (myPart) {
+          setResultModal({ open: true, isWinner: myPart.is_winner, reward: myPart.reward });
         }
       }
     } catch (err) {
@@ -133,14 +140,16 @@ export const BattleTab = () => {
       const secs = Math.floor((diff / 1000) % 60);
       setTimeLeft({ minutes: mins, seconds: secs });
       
+      // When timer hits 0, trigger battle processing
       if (mins === 0 && secs === 0) {
-        setTimeout(() => fetchData(), 2000);
+        triggerProcess();
+        setTimeout(() => fetchData(), 3000);
       }
     };
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, triggerProcess]);
 
   // Polling
   useEffect(() => {
@@ -149,32 +158,15 @@ export const BattleTab = () => {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Realtime - only subscribe when animation is NOT playing
+  // Realtime
   useEffect(() => {
-    if (showSelection) return; // Don't subscribe during animation
-    
     const channel = supabase
       .channel('battle-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_participants' }, () => {
-        if (!showSelectionRef.current) fetchData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_rounds' }, () => {
-        if (!showSelectionRef.current) fetchData();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_participants' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_rounds' }, () => fetchData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchData, showSelection]);
-
-  const handleSelectionComplete = useCallback(() => {
-    showSelectionRef.current = false;
-    setShowSelection(false);
-    if (telegramUser && selectionParticipants.length > 0) {
-      const myResult = selectionParticipants.find(p => p.telegram_id === telegramUser.id);
-      if (myResult) {
-        setResultModal({ open: true, isWinner: myResult.is_winner, reward: myResult.reward });
-      }
-    }
-  }, [telegramUser, selectionParticipants]);
+  }, [fetchData]);
 
   const handleJoin = async () => {
     if (!telegramUser || hasJoined || joining) return;
@@ -257,16 +249,6 @@ export const BattleTab = () => {
       </motion.button>
 
       <BattleParticipants participants={participants} />
-
-      {/* Selection Animation */}
-      {showSelection && (
-        <BattleSelectionAnimation
-          participants={selectionParticipants}
-          isOpen={showSelection}
-          onComplete={handleSelectionComplete}
-          myTelegramId={telegramUser?.id}
-        />
-      )}
 
       {/* Result modal */}
       <BattleResultModal
