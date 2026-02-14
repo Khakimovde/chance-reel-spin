@@ -61,11 +61,8 @@ export const LeaderboardTab = () => {
   const top3 = leaders.slice(0, 3);
   const rest = leaders.slice(3);
 
-  // Podium order: [2nd, 1st, 3rd]
-  const podiumOrder = top3.length === 3 ? [top3[1], top3[0], top3[2]] : top3;
-  const podiumRanks = [1, 0, 2];
-  const podiumSizes = ['w-12 h-12', 'w-16 h-16', 'w-11 h-11'];
-  const podiumHeights = ['h-16', 'h-22', 'h-14'];
+  // Podium order: [1st, 2nd, 3rd] - top to bottom
+  const podiumSizes = ['w-14 h-14', 'w-12 h-12', 'w-11 h-11'];
 
   if (loading) {
     return (
@@ -113,54 +110,46 @@ export const LeaderboardTab = () => {
 
       {/* Compact Podium - Top 3 */}
       {top3.length >= 3 && (
-        <div className="glass-card-elevated p-3 pt-4">
-          <div className="flex items-end justify-center gap-2">
-            {podiumOrder.map((user, i) => {
-              const rankIdx = podiumRanks[i];
-              const colors = PODIUM_COLORS[rankIdx];
-              const isMe = telegramUser && user.telegram_id === telegramUser.id;
-              return (
-                <motion.div
-                  key={user.id}
-                  className={`flex flex-col items-center ${isMe ? 'relative' : ''}`}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1, type: 'spring', bounce: 0.3 }}
-                >
-                  {isMe && (
-                    <div className="absolute -top-1 -right-1 z-10 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                      <span className="text-[8px] text-primary-foreground font-bold">Me</span>
-                    </div>
+        <div className="glass-card-elevated p-3 space-y-1.5">
+          {top3.map((user, i) => {
+            const colors = PODIUM_COLORS[i];
+            const isMe = telegramUser && user.telegram_id === telegramUser.id;
+            return (
+              <motion.div
+                key={user.id}
+                className={`flex items-center gap-3 p-2 rounded-xl ${isMe ? 'bg-primary/5 ring-1 ring-primary/20' : ''}`}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${colors.bg} flex items-center justify-center shrink-0 shadow-sm`}>
+                  {i === 0 ? (
+                    <Crown className="w-4 h-4 text-white" />
+                  ) : (
+                    <span className="text-white font-black text-sm">#{i + 1}</span>
                   )}
-                  {rankIdx === 0 && (
-                    <motion.div animate={{ y: [0, -3, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                      <Crown className="w-5 h-5 text-amber-400 mb-0.5" />
-                    </motion.div>
-                  )}
-                  <div className={`relative ${podiumSizes[i]} rounded-full ring-2 ${colors.ring} p-0.5`}>
-                    <img src={getAvatar(user)} alt="" className="w-full h-full rounded-full object-cover" />
-                    <div className="absolute -bottom-1 -right-1 text-sm">{colors.label}</div>
-                  </div>
-                  <p className="mt-1 font-bold text-[11px] text-center leading-tight max-w-[70px] truncate">
+                </div>
+                <div className={`relative ${podiumSizes[i]} rounded-full ring-2 ${colors.ring} p-0.5 shrink-0`}>
+                  <img src={getAvatar(user)} alt="" className="w-full h-full rounded-full object-cover" />
+                  <div className="absolute -bottom-1 -right-1 text-xs">{colors.label}</div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm truncate">
                     {getDisplayName(user)}
+                    {isMe && <span className="text-primary text-[10px] ml-1">(Siz)</span>}
                   </p>
-                  <div className="flex items-center gap-0.5 mt-0.5">
+                  <div className="flex items-center gap-1">
                     <TelegramIcon />
-                    <span className="text-[8px] text-muted-foreground">{user.telegram_id}</span>
+                    <span className="text-[10px] text-muted-foreground">{user.telegram_id}</span>
                   </div>
-                  <div className="flex items-center gap-0.5 mt-1">
-                    <Coins className="w-3 h-3 text-amber-500" />
-                    <span className="text-[11px] font-bold text-amber-600">{user.coins.toLocaleString()}</span>
-                  </div>
-                  <div className={`${podiumHeights[i]} w-14 mt-1.5 rounded-t-lg bg-gradient-to-t ${colors.bg}`}>
-                    <div className="flex items-center justify-center pt-1">
-                      <span className="text-white/80 font-black text-sm">#{rankIdx + 1}</span>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
+                </div>
+                <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/50 px-2 py-1 rounded-full shrink-0">
+                  <Coins className="w-3 h-3 text-amber-500" />
+                  <span className="text-xs font-bold text-amber-700">{user.coins.toLocaleString()}</span>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
