@@ -278,7 +278,7 @@ export const ProfileTab = () => {
             </div>
 
             <div className="p-2 bg-muted/30 rounded-lg text-center">
-              <p className="text-[10px] text-muted-foreground">10,000 tanga = 13,000 so'm</p>
+              <p className="text-[10px] text-muted-foreground">10,000 tanga = 17,000 so'm</p>
             </div>
 
             <button

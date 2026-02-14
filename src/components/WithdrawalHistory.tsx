@@ -22,7 +22,7 @@ interface Withdrawal {
   rejection_reason?: string | null;
 }
 
-const NEW_COIN_TO_SOM_RATE = 1.3; // 10000 tanga = 13000 som (yangi kurs)
+const NEW_COIN_TO_SOM_RATE = 1.7; // 10000 tanga = 17000 som (yangi kurs)
 const OLD_COIN_TO_SOM_RATE = 2; // 10000 tanga = 20000 som (eski kurs)
 const RATE_CHANGE_DATE = '2026-02-14T00:00:00Z'; // Kurs o'zgargan sana
 
