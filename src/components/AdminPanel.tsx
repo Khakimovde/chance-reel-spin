@@ -79,7 +79,7 @@ interface AdminPanelProps {
 }
 
 // Default fallback (overwritten by app_settings)
-const DEFAULT_COIN_TO_SOM_RATE = 1.3;
+const DEFAULT_COIN_TO_SOM_RATE = 1.7;
 
 export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [activeSection, setActiveSection] = useState<'stats' | 'withdrawals' | 'channels' | 'users' | 'games' | 'settings'>('stats');
