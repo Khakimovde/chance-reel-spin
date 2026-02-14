@@ -83,10 +83,10 @@ export const BattleSelectionAnimation = ({
         idx++;
       } else {
         cleanup();
-        setTimeout(() => {
-          setMyResult(iAmWinner ? 'won' : 'lost');
-          setPhase('result');
-        }, 600);
+        setMyResult(iAmWinner ? 'won' : 'lost');
+        setPhase('result');
+        // Auto-close after 3 seconds
+        setTimeout(onComplete, 3000);
       }
     }, speed);
 
@@ -130,11 +130,9 @@ export const BattleSelectionAnimation = ({
                 </p>
               </div>
             </div>
-            {phase === 'result' && (
-              <button onClick={onComplete} className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-                <X className="w-4 h-4 text-white" />
-              </button>
-            )}
+            <button onClick={onComplete} className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
+              <X className="w-4 h-4 text-white" />
+            </button>
           </div>
 
           {/* Countdown phase */}
