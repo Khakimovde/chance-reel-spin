@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.update-coins]
 verify_jwt = false
+
+[functions.battle-join]
+verify_jwt = false
+
+[functions.battle-process]
+verify_jwt = false
