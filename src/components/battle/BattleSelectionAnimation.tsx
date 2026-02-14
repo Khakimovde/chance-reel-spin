@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Zap, X } from 'lucide-react';
 
@@ -32,8 +32,9 @@ export const BattleSelectionAnimation = ({
   const [myResult, setMyResult] = useState<'won' | 'lost' | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const revealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const winners = participants.filter(p => p.is_winner);
+  const winners = useMemo(() => participants.filter(p => p.is_winner), [participants]);
   const iAmWinner = myTelegramId ? winners.some(w => w.telegram_id === myTelegramId) : false;
 
   const cleanup = useCallback(() => {
@@ -41,15 +42,19 @@ export const BattleSelectionAnimation = ({
       clearInterval(revealTimerRef.current);
       revealTimerRef.current = null;
     }
+    if (autoCloseRef.current) {
+      clearTimeout(autoCloseRef.current);
+      autoCloseRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     if (!isOpen || participants.length === 0) return;
+    cleanup();
     setPhase('countdown');
     setRevealedWinners([]);
     setMyResult(null);
 
-    // "Boshlandi!" for 1.5s then start revealing
     const countdownTimer = setTimeout(() => {
       setPhase('revealing');
     }, 1500);
@@ -58,40 +63,42 @@ export const BattleSelectionAnimation = ({
       clearTimeout(countdownTimer);
       cleanup();
     };
-  }, [isOpen, participants.length, cleanup]);
+  }, [isOpen, participants, cleanup]);
 
   // Reveal winners one by one
   useEffect(() => {
     if (phase !== 'revealing') return;
 
-    const maxShow = Math.min(winners.length, 50);
-    if (maxShow === 0) {
+    const winnersToShow = winners.slice(0, 50);
+    if (winnersToShow.length === 0) {
       setMyResult(iAmWinner ? 'won' : 'lost');
       setPhase('result');
       return;
     }
 
-    const speed = Math.max(80, Math.min(300, 4000 / maxShow));
+    const speed = Math.max(80, Math.min(300, 4000 / winnersToShow.length));
     let idx = 0;
 
     revealTimerRef.current = setInterval(() => {
-      if (idx < maxShow) {
-        const winner = winners[idx];
-        if (winner) {
-          setRevealedWinners(prev => [...prev, winner]);
-        }
+      if (idx < winnersToShow.length) {
+        setRevealedWinners(prev => [...prev, winnersToShow[idx]]);
         idx++;
       } else {
-        cleanup();
+        if (revealTimerRef.current) clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
         setMyResult(iAmWinner ? 'won' : 'lost');
         setPhase('result');
-        // Auto-close after 3 seconds
-        setTimeout(onComplete, 3000);
+        autoCloseRef.current = setTimeout(onComplete, 3000);
       }
     }, speed);
 
-    return cleanup;
-  }, [phase, winners, iAmWinner, cleanup]);
+    return () => {
+      if (revealTimerRef.current) {
+        clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+    };
+  }, [phase]);
 
   // Auto-scroll to bottom as winners appear
   useEffect(() => {
