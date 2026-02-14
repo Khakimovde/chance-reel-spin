@@ -39,10 +39,13 @@ export const BattleHistory = ({ telegramId }: { telegramId: number | undefined }
     setLoading(true);
 
     const fetchHistory = async () => {
+      // Only show last 6 hours
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
       const { data } = await supabase
         .from('battle_rounds')
         .select('*')
         .eq('status', 'completed')
+        .gte('round_time', sixHoursAgo)
         .order('round_time', { ascending: false })
         .limit(30);
 
@@ -108,7 +111,8 @@ export const BattleHistory = ({ telegramId }: { telegramId: number | undefined }
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={e => e.stopPropagation()}
-              className="w-full max-w-md bg-background rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col"
+              className="w-full max-w-md bg-background rounded-t-3xl sm:rounded-3xl flex flex-col"
+              style={{ maxHeight: '70vh', marginBottom: 'env(safe-area-inset-bottom, 60px)', paddingBottom: '60px' }}
             >
               {/* Header */}
               <div className="flex items-center justify-between p-5 border-b border-border/50">
