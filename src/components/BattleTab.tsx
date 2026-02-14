@@ -63,19 +63,6 @@ export const BattleTab = () => {
   const telegramUser = getTelegramUser();
   const shownRoundRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const update = () => {
-      const diff = getTimeUntilNextRound();
-      setTimeLeft({
-        minutes: Math.floor((diff / 1000 / 60) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-      });
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   const fetchData = useCallback(async () => {
     try {
       const currentSlot = getCurrentRoundSlot();
@@ -119,6 +106,22 @@ export const BattleTab = () => {
       setLoading(false);
     }
   }, [telegramUser]);
+
+  useEffect(() => {
+    const update = () => {
+      const diff = getTimeUntilNextRound();
+      const mins = Math.floor((diff / 1000 / 60) % 60);
+      const secs = Math.floor((diff / 1000) % 60);
+      setTimeLeft({ minutes: mins, seconds: secs });
+      
+      if (mins === 0 && secs === 0) {
+        setTimeout(() => fetchData(), 1000);
+      }
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   useEffect(() => {
     fetchData();
