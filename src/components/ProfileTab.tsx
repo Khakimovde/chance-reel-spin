@@ -52,7 +52,7 @@ export const ProfileTab = () => {
 
   const handleWithdraw = async () => {
     const amount = parseInt(withdrawAmount);
-    const MIN_WITHDRAWAL = 5000;
+    const MIN_WITHDRAWAL = 10000;
     
     if (!amount || amount < MIN_WITHDRAWAL) {
       toast.error(`Minimal yechish: ${MIN_WITHDRAWAL.toLocaleString()} tanga`);
@@ -283,17 +283,17 @@ export const ProfileTab = () => {
 
             <button
               onClick={() => setShowWithdrawModal(true)}
-              disabled={coins < 5000}
+              disabled={coins < 10000}
               className="w-full py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CreditCard className="w-4 h-4" />
               Pul yechish
             </button>
 
-            {coins < 5000 && (
+            {coins < 10000 && (
               <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
                 <AlertCircle className="w-3 h-3" />
-                Minimal yechish: 5,000 tanga
+                Minimal yechish: 10,000 tanga
               </p>
             )}
           </div>
