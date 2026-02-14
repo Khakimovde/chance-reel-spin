@@ -39,7 +39,7 @@ const Index = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       refreshUserData();
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [refreshUserData]);
 

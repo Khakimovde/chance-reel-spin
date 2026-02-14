@@ -38,8 +38,23 @@ export const useTelegram = () => {
   };
 
   const syncUserData = useCallback(async (telegramUser: TelegramUser) => {
+    const setFallback = () => {
+      const local = getLocalFallback();
+      setUser(prev => prev ?? {
+        ...telegramUser,
+        coins: local.coins,
+        tickets: local.tickets,
+        referral_count: local.referral_count,
+        total_winnings: local.total_winnings,
+        task_invite_friend: local.task_invite_friend,
+      });
+    };
+
     try {
-      // Sync user with backend
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
       const { data, error } = await supabase.functions.invoke('sync-user', {
         body: {
           telegramId: telegramUser.id,
@@ -50,18 +65,11 @@ export const useTelegram = () => {
         }
       });
 
+      clearTimeout(timeout);
+
       if (error) {
         console.error('Error syncing user:', error);
-        // Use local data as fallback
-        const local = getLocalFallback();
-        setUser({
-          ...telegramUser,
-          coins: local.coins,
-          tickets: local.tickets,
-          referral_count: local.referral_count,
-          total_winnings: local.total_winnings,
-          task_invite_friend: local.task_invite_friend,
-        });
+        setFallback();
         return;
       }
 
@@ -82,32 +90,19 @@ export const useTelegram = () => {
         };
         setUser(userData);
         
-        // Sync local store with backend data
         syncWithBackend(
           data.user.coins,
           data.user.tickets,
           data.user.referral_count,
           data.user.total_winnings
         );
-        
-        // Sync task invite friend count from backend
         syncTaskInviteFriend(data.user.task_invite_friend || 0);
+      } else {
+        setFallback();
       }
     } catch (err) {
       console.error('Error fetching user data:', err);
-      // Use local data as fallback
-      const telegramUser = getTelegramUser();
-      if (telegramUser) {
-        const local = getLocalFallback();
-        setUser({
-          ...telegramUser,
-          coins: local.coins,
-          tickets: local.tickets,
-          referral_count: local.referral_count,
-          total_winnings: local.total_winnings,
-          task_invite_friend: local.task_invite_friend,
-        });
-      }
+      setFallback();
     }
   }, [syncWithBackend, syncTaskInviteFriend]);
 
