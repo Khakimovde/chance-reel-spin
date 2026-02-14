@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Trophy, Zap, X } from 'lucide-react';
 
 interface Participant {
@@ -16,66 +15,61 @@ const getAvatar = (p: Participant) =>
   p.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.first_name || p.telegram_id}`;
 const getName = (p: Participant) => p.first_name || p.username || `User ${p.telegram_id}`;
 
-export const BattleSelectionAnimation = ({
-  participants,
-  isOpen,
-  onComplete,
-  myTelegramId,
-}: {
+interface Props {
   participants: Participant[];
   isOpen: boolean;
   onComplete: () => void;
   myTelegramId?: number;
-}) => {
+}
+
+const BattleSelectionAnimationInner = ({ participants, isOpen, onComplete, myTelegramId }: Props) => {
   const [phase, setPhase] = useState<'countdown' | 'revealing' | 'result'>('countdown');
   const [revealedWinners, setRevealedWinners] = useState<Participant[]>([]);
   const [myResult, setMyResult] = useState<'won' | 'lost' | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  
-  // Freeze participants on open to prevent re-render issues
   const frozenRef = useRef<Participant[]>([]);
-  const isInitialized = useRef(false);
+  const mountedRef = useRef(true);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
   }, []);
 
-  // Initialize only once when isOpen becomes true
+  // Freeze participants on mount
   useEffect(() => {
-    if (!isOpen || participants.length === 0) {
-      isInitialized.current = false;
-      return;
+    mountedRef.current = true;
+    if (participants.length > 0) {
+      frozenRef.current = [...participants];
     }
     
-    if (isInitialized.current) return;
-    isInitialized.current = true;
-    
-    // Freeze participants
-    frozenRef.current = [...participants];
-    
+    // Start countdown → revealing
     cleanup();
     setPhase('countdown');
     setRevealedWinners([]);
     setMyResult(null);
 
     timerRef.current = setTimeout(() => {
-      setPhase('revealing');
+      if (mountedRef.current) setPhase('revealing');
     }, 1500);
 
     return () => {
+      mountedRef.current = false;
       cleanup();
-      isInitialized.current = false;
     };
-  }, [isOpen]); // Only depend on isOpen, NOT participants
+  }, []); // Only run once on mount
 
   // Reveal winners one by one
   useEffect(() => {
     if (phase !== 'revealing') return;
 
     const allParticipants = frozenRef.current;
+    if (allParticipants.length === 0) {
+      setPhase('result');
+      return;
+    }
+
     const winners = allParticipants.filter(p => p.is_winner);
     const winnersToShow = winners.slice(0, 50);
     const iAmWinner = myTelegramId ? winners.some(w => w.telegram_id === myTelegramId) : false;
@@ -90,6 +84,10 @@ export const BattleSelectionAnimation = ({
     let idx = 0;
 
     intervalRef.current = setInterval(() => {
+      if (!mountedRef.current) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        return;
+      }
       if (idx < winnersToShow.length) {
         const winner = winnersToShow[idx];
         if (winner) {
@@ -100,7 +98,9 @@ export const BattleSelectionAnimation = ({
         if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
         setMyResult(iAmWinner ? 'won' : 'lost');
         setPhase('result');
-        timerRef.current = setTimeout(onComplete, 3000);
+        timerRef.current = setTimeout(() => {
+          if (mountedRef.current) onComplete();
+        }, 3000);
       }
     }, speed);
 
@@ -115,8 +115,6 @@ export const BattleSelectionAnimation = ({
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [revealedWinners]);
-
-  if (!isOpen || participants.length === 0) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -238,3 +236,5 @@ export const BattleSelectionAnimation = ({
     </div>
   );
 };
+
+export const BattleSelectionAnimation = memo(BattleSelectionAnimationInner);

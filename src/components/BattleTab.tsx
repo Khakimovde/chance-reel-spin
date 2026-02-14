@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Swords, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getTelegramUser } from '@/lib/telegram';
@@ -47,6 +47,14 @@ function getPreviousRoundSlot(): string {
   return `battle_${Math.floor(Date.now() / BATTLE_INTERVAL) * BATTLE_INTERVAL}`;
 }
 
+// Read shown round from localStorage once at module level
+function getShownRound(): string | null {
+  try { return localStorage.getItem('battle_shown_round'); } catch { return null; }
+}
+function setShownRound(id: string) {
+  try { localStorage.setItem('battle_shown_round', id); } catch {}
+}
+
 export const BattleTab = () => {
   const [timeLeft, setTimeLeft] = useState({ minutes: 0, seconds: 0 });
   const [currentRound, setCurrentRound] = useState<BattleRound | null>(null);
@@ -61,16 +69,13 @@ export const BattleTab = () => {
   });
 
   const telegramUser = getTelegramUser();
-  const shownRoundRef = useRef<string | null>(null);
-
-  // Initialize from localStorage once
-  if (shownRoundRef.current === null) {
-    try { shownRoundRef.current = localStorage.getItem('battle_shown_round'); } catch {}
-  }
+  const shownRoundRef = useRef<string | null>(getShownRound());
+  // Use ref for showSelection to avoid stale closures in callbacks
+  const showSelectionRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     // Don't fetch if selection animation is playing
-    if (showSelection) return;
+    if (showSelectionRef.current) return;
     
     try {
       const currentSlot = getCurrentRoundSlot();
@@ -80,6 +85,9 @@ export const BattleTab = () => {
         supabase.from('battle_rounds').select('*').eq('round_slot', currentSlot).maybeSingle(),
         supabase.from('battle_rounds').select('*').eq('round_slot', prevSlot).maybeSingle(),
       ]);
+
+      // Double-check animation isn't playing after async
+      if (showSelectionRef.current) return;
 
       const cr = currentRes.data as BattleRound | null;
       const pr = prevRes.data as BattleRound | null;
@@ -104,8 +112,9 @@ export const BattleTab = () => {
         const myResult = lp.find(p => p.telegram_id === telegramUser.id);
         if (myResult) {
           shownRoundRef.current = pr.id;
-          try { localStorage.setItem('battle_shown_round', pr.id); } catch {}
+          setShownRound(pr.id);
           setSelectionParticipants(lp);
+          showSelectionRef.current = true;
           setShowSelection(true);
         }
       }
@@ -114,8 +123,9 @@ export const BattleTab = () => {
     } finally {
       setLoading(false);
     }
-  }, [telegramUser, showSelection]);
+  }, [telegramUser]);
 
+  // Timer
   useEffect(() => {
     const update = () => {
       const diff = getTimeUntilNextRound();
@@ -124,7 +134,7 @@ export const BattleTab = () => {
       setTimeLeft({ minutes: mins, seconds: secs });
       
       if (mins === 0 && secs === 0) {
-        setTimeout(() => fetchData(), 1000);
+        setTimeout(() => fetchData(), 2000);
       }
     };
     update();
@@ -132,22 +142,31 @@ export const BattleTab = () => {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  // Polling
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  // Realtime - only subscribe when animation is NOT playing
   useEffect(() => {
+    if (showSelection) return; // Don't subscribe during animation
+    
     const channel = supabase
       .channel('battle-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_participants' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_rounds' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_participants' }, () => {
+        if (!showSelectionRef.current) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_rounds' }, () => {
+        if (!showSelectionRef.current) fetchData();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchData]);
+  }, [fetchData, showSelection]);
 
-  const handleSelectionComplete = () => {
+  const handleSelectionComplete = useCallback(() => {
+    showSelectionRef.current = false;
     setShowSelection(false);
     if (telegramUser && selectionParticipants.length > 0) {
       const myResult = selectionParticipants.find(p => p.telegram_id === telegramUser.id);
@@ -155,7 +174,7 @@ export const BattleTab = () => {
         setResultModal({ open: true, isWinner: myResult.is_winner, reward: myResult.reward });
       }
     }
-  };
+  }, [telegramUser, selectionParticipants]);
 
   const handleJoin = async () => {
     if (!telegramUser || hasJoined || joining) return;
@@ -240,12 +259,14 @@ export const BattleTab = () => {
       <BattleParticipants participants={participants} />
 
       {/* Selection Animation */}
-      <BattleSelectionAnimation
-        participants={selectionParticipants}
-        isOpen={showSelection}
-        onComplete={handleSelectionComplete}
-        myTelegramId={telegramUser?.id}
-      />
+      {showSelection && (
+        <BattleSelectionAnimation
+          participants={selectionParticipants}
+          isOpen={showSelection}
+          onComplete={handleSelectionComplete}
+          myTelegramId={telegramUser?.id}
+        />
+      )}
 
       {/* Result modal */}
       <BattleResultModal
