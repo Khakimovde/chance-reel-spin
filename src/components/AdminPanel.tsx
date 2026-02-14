@@ -134,13 +134,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [newCoinToSomRate, setNewCoinToSomRate] = useState('2');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // Auto-refresh interval
+  // Fast parallel initial load
   useEffect(() => {
-    fetchData();
-    fetchChannels();
-    fetchGames();
-    fetchAppSettings();
-    const interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
+    Promise.all([fetchData(), fetchChannels(), fetchGames(), fetchAppSettings()]);
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -521,12 +518,14 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       setRejectionReason('');
       setShowRejectModal(null);
       
-      // Optimistic update - immediately update local state
+      // Optimistic update + re-fetch to confirm
       setWithdrawals(prev => prev.map(w => 
         w.id === withdrawalId 
           ? { ...w, status: newStatus, processed_at: new Date().toISOString(), ...(action === 'reject' && reason ? { rejection_reason: reason } : {}) }
           : w
       ));
+      // Re-fetch after short delay to confirm DB state
+      setTimeout(() => fetchData(), 1500);
     } catch (error) {
       console.error('Error processing withdrawal:', error);
       toast.error('Xatolik yuz berdi');
