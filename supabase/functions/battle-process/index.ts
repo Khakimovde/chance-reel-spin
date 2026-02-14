@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const WINNER_PERCENT = 0.50;
 const WINNER_REWARD = 20;
-const LOSER_REWARD = 40;
+const LOSER_REWARD = 10;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
