@@ -89,6 +89,19 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const [showRejectModal, setShowRejectModal] = useState<string | null>(null);
+  const [withdrawalSearch, setWithdrawalSearch] = useState('');
+
+  // Filtered withdrawals based on search
+  const filteredWithdrawals = withdrawals.filter(w => {
+    if (!withdrawalSearch.trim()) return true;
+    const q = withdrawalSearch.toLowerCase().trim();
+    return (
+      (w.telegram_id?.toString() || '').includes(q) ||
+      (w.username || '').toLowerCase().includes(q) ||
+      (w.first_name || '').toLowerCase().includes(q) ||
+      (w.id || '').toLowerCase().includes(q)
+    );
+  });
   
   // User management
   const [searchTelegramId, setSearchTelegramId] = useState('');
@@ -566,7 +579,13 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       
       setRejectionReason('');
       setShowRejectModal(null);
-      await fetchData();
+      
+      // Optimistic update - immediately update local state
+      setWithdrawals(prev => prev.map(w => 
+        w.id === withdrawalId 
+          ? { ...w, status: newStatus, processed_at: new Date().toISOString(), ...(action === 'reject' && reason ? { rejection_reason: reason } : {}) }
+          : w
+      ));
     } catch (error) {
       console.error('Error processing withdrawal:', error);
       toast.error('Xatolik yuz berdi');
@@ -926,13 +945,34 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                 </p>
               </div>
 
-              {withdrawals.length === 0 ? (
+              {/* Search */}
+              <div className="glass-card p-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={withdrawalSearch}
+                    onChange={(e) => setWithdrawalSearch(e.target.value)}
+                    placeholder="ID yoki username bo'yicha qidiring..."
+                    className="flex-1 px-3 py-2 rounded-lg bg-muted border-0 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary"
+                  />
+                  {withdrawalSearch && (
+                    <button
+                      onClick={() => setWithdrawalSearch('')}
+                      className="px-3 py-2 rounded-lg bg-muted text-muted-foreground text-sm"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {filteredWithdrawals.length === 0 ? (
                 <div className="glass-card-elevated p-8 text-center">
                   <Wallet className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                   <p className="text-muted-foreground">Hozircha so'rovlar yo'q</p>
                 </div>
               ) : (
-                withdrawals.map((withdrawal, index) => {
+                filteredWithdrawals.map((withdrawal, index) => {
                   // Get card background color based on status
                   const getCardStyle = () => {
                     switch (withdrawal.status) {
