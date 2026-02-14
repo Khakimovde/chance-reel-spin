@@ -422,92 +422,33 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
 
   const fetchData = async () => {
     try {
-      // Use COUNT to get total users (avoids 1000 row limit)
-      const { count: totalUsersCount, error: countError } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
-      
-      if (countError) throw countError;
-      
-      // Get today's new users count
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const { count: todayUsersCount } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', todayStart.toISOString());
-      
-      // Get total coins in system (need to fetch all for sum)
-      // Use range to fetch in batches if over 1000
-      let allCoins = 0;
-      let offset = 0;
-      const batchSize = 1000;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const { data: coinsBatch } = await supabase
-          .from('users')
-          .select('coins')
-          .range(offset, offset + batchSize - 1);
-        
-        if (coinsBatch && coinsBatch.length > 0) {
-          allCoins += coinsBatch.reduce((sum, u) => sum + (u.coins || 0), 0);
-          offset += batchSize;
-          if (coinsBatch.length < batchSize) hasMore = false;
-        } else {
-          hasMore = false;
-        }
-      }
+      // Parallel fetches for speed
+      const [
+        { count: totalUsersCount },
+        todayUsersRes,
+        { data: withdrawalsData },
+        { count: gamesCount },
+        { data: allDailyStats },
+      ] = await Promise.all([
+        supabase.from('users').select('*', { count: 'exact', head: true }),
+        supabase.from('users').select('*', { count: 'exact', head: true })
+          .gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString()),
+        supabase.from('withdrawals').select('*').order('created_at', { ascending: false }),
+        supabase.from('game_history').select('*', { count: 'exact', head: true }),
+        supabase.from('daily_stats').select('*'),
+      ]);
 
-      // Fetch all withdrawals
-      const { data: withdrawalsData, error: withdrawalsError } = await supabase 
-        .from('withdrawals')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (withdrawalsError) throw withdrawalsError;
-
-      // Fetch user balances for each withdrawal using telegram_id
-      const withdrawalsWithBalance = await Promise.all(
-        (withdrawalsData || []).map(async (w) => {
-          if (w.telegram_id) {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('coins')
-              .eq('telegram_id', w.telegram_id)
-              .maybeSingle();
-            return { ...w, user_current_coins: userData?.coins || 0 };
-          }
-          return { ...w, user_current_coins: 0 };
-        })
-      );
-
-      // Use withdrawalsWithBalance instead of withdrawalsData
-
-      // Fetch game history count
-      const { count: gamesCount } = await supabase
-        .from('game_history')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch ALL daily stats and sum them up
-      const { data: allDailyStats } = await supabase
-        .from('daily_stats')
-        .select('*');
-      
-      // Calculate total ads from all daily stats
       const totalAdsFromStats = allDailyStats?.reduce((sum, d) => sum + (d.ads_watched || 0), 0) || 0;
       const totalWheelFromStats = allDailyStats?.reduce((sum, d) => sum + (d.wheel_spins || 0), 0) || 0;
-      
-      // Fetch today's stats
       const today = new Date().toISOString().split('T')[0];
       const todayStats = allDailyStats?.find(d => d.date === today);
-      
+
       const pendingWithdrawals = withdrawalsData?.filter(w => w.status === 'pending').length || 0;
       const totalWithdrawalsAmount = withdrawalsData?.filter(w => w.status === 'paid').reduce((sum, w) => sum + w.amount, 0) || 0;
 
       setStats({
         totalUsers: totalUsersCount || 0,
-        todayUsers: todayUsersCount || 0,
+        todayUsers: todayUsersRes.count || 0,
         totalAdsWatched: totalAdsFromStats,
         todayAdsWatched: todayStats?.ads_watched || 0,
         totalWheelSpins: totalWheelFromStats,
@@ -516,10 +457,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
         todayGamesPlayed: todayStats?.games_played || 0,
         pendingWithdrawals,
         totalWithdrawalsAmount,
-        totalCoinsInSystem: allCoins,
+        totalCoinsInSystem: 0,
       });
 
-      setWithdrawals(withdrawalsWithBalance || []);
+      setWithdrawals(withdrawalsData || []);
     } catch (error) {
       console.error('Error fetching admin data:', error);
     } finally {
