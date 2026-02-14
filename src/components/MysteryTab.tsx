@@ -607,7 +607,7 @@ export const MysteryTab = () => {
 
               {selectedTask.taskKey === 'watchAd' && (
                 <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
-                  <p>🎬 10 ta reklamani ko'ring va 300 tanga oling!</p>
+                  <p>🎬 10 ta reklamani ko'ring va {adRewardCoins} tanga oling!</p>
                   <p className="text-xs mt-1">Hozirgi: {taskCompletion.watchAd}/10</p>
                 </div>
               )}
