@@ -192,7 +192,7 @@ export const MysteryTab = () => {
         : `${taskCompletion.inviteFriend}/2 ta do'st taklif qiling`,
       icon: Users,
       image: '👥',
-      reward: { type: 'coins', value: 160, label: '160 Tanga' },
+      reward: { type: 'coins', value: 100, label: '100 Tanga' },
       maxCount: 2,
       currentCount: taskCompletion.inviteFriend,
       completed: taskCompletion.inviteFriend >= 2,

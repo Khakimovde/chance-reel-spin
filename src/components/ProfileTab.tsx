@@ -26,6 +26,7 @@ export const ProfileTab = () => {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeProfileSection, setActiveProfileSection] = useState<'referral' | 'withdrawal'>('referral');
 
   // Use ONLY backend data - coins is main balance, total_winnings is withdrawable
   const coins = user?.coins ?? 0;  // Asosiy umumiy balans
@@ -54,7 +55,13 @@ export const ProfileTab = () => {
     const MIN_WITHDRAWAL = 5000;
     
     if (!amount || amount < MIN_WITHDRAWAL) {
-      toast.error(`Minimal yechish: ${MIN_WITHDRAWAL.toLocaleString()} tanga (${(MIN_WITHDRAWAL * 2).toLocaleString()} so'm)`);
+      toast.error(`Minimal yechish: ${MIN_WITHDRAWAL.toLocaleString()} tanga`);
+      return;
+    }
+    // Validate card number - exactly 16 digits
+    const cleanCard = walletAddress.replace(/\s/g, '');
+    if (!cleanCard || cleanCard.length !== 16 || !/^\d{16}$/.test(cleanCard)) {
+      toast.error('Karta raqamini to\'g\'ri kiriting (16 ta raqam)');
       return;
     }
     // CHANGED: Check main balance (coins) instead of totalWinnings
@@ -155,119 +162,157 @@ export const ProfileTab = () => {
         ))}
       </div>
 
-      {/* Referral Section */}
+      {/* Referral & Withdrawal Tabs */}
       <div className="glass-card-elevated p-3 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shadow-sm">
-              <Users className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-foreground">Do'stlarni taklif qiling</h3>
-              <p className="text-[10px] text-muted-foreground">Har bir taklif: 50 tanga</p>
-            </div>
-          </div>
-        </div>
-
         <div className="flex gap-2">
-          <div className="flex-1 bg-muted rounded-lg px-2.5 py-2 text-xs text-muted-foreground truncate">
-            {referralLink}
-          </div>
           <button
-            onClick={copyReferral}
-            className="px-3 py-2 rounded-lg gradient-primary text-white flex items-center gap-1.5 shadow-sm"
+            onClick={() => setActiveProfileSection('referral')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeProfileSection === 'referral' 
+                ? 'bg-primary text-primary-foreground shadow-sm' 
+                : 'bg-muted text-muted-foreground'
+            }`}
           >
-            <Copy className="w-3.5 h-3.5" />
+            👥 Referal
+          </button>
+          <button
+            onClick={() => setActiveProfileSection('withdrawal')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeProfileSection === 'withdrawal' 
+                ? 'bg-primary text-primary-foreground shadow-sm' 
+                : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            💰 Pul yechish
           </button>
         </div>
-
-        <button
-          onClick={shareToTelegram}
-          className="w-full py-2.5 rounded-lg bg-[#0088cc] text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-          </svg>
-          Telegramda ulashish
-        </button>
-
-        <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
-          <div className="flex items-center gap-1.5">
-            <Gift className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-xs text-foreground">Taklif qilinganlar</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-bold text-foreground">{referralCount}</span>
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-        </div>
       </div>
 
-      {/* Payment Schedule Info */}
-      <div className="glass-card-elevated p-3">
-        <div className="flex items-center gap-3 p-2.5 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 rounded-xl border border-red-200/50 dark:border-red-800/30">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center shadow-md">
-            <span className="text-lg">📅</span>
-          </div>
-          <div className="flex-1">
-            <p className="text-xs font-bold text-red-700 dark:text-red-300">To'lov jadvali</p>
-            <p className="text-[11px] font-bold text-red-600 dark:text-red-400">
-              Har haftada <strong>Dushanba</strong> va <strong>Payshanba</strong> kunlari kun davomida amalga oshiriladi
-            </p>
-          </div>
-        </div>
-      </div>
+      {activeProfileSection === 'referral' && (
+        <>
+          {/* Referral Section */}
+          <div className="glass-card-elevated p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shadow-sm">
+                  <Users className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">Do'stlarni taklif qiling</h3>
+                  <p className="text-[10px] text-muted-foreground">Har bir taklif: 50 tanga</p>
+                </div>
+              </div>
+            </div>
 
-      {/* Withdrawal Section - Uses main balance (coins) */}
-      <div className="glass-card-elevated p-3 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-sm">
-            <Banknote className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-semibold text-foreground">Pul yechish</h3>
-            <p className="text-[10px] text-muted-foreground">Asosiy balansdan pul yeching</p>
-          </div>
-        </div>
+            <div className="flex gap-2">
+              <div className="flex-1 bg-muted rounded-lg px-2.5 py-2 text-xs text-muted-foreground truncate">
+                {referralLink}
+              </div>
+              <button
+                onClick={copyReferral}
+                className="px-3 py-2 rounded-lg gradient-primary text-white flex items-center gap-1.5 shadow-sm"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-        <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg">
-          <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-amber-500" />
-            <span className="text-xs text-muted-foreground">Mavjud balans:</span>
-          </div>
-          <span className="text-sm font-bold text-foreground">{coins.toLocaleString()} tanga</span>
-        </div>
+            <button
+              onClick={shareToTelegram}
+              className="w-full py-2.5 rounded-lg bg-[#0088cc] text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+              </svg>
+              Telegramda ulashish
+            </button>
 
-        <button
-          onClick={() => setShowWithdrawModal(true)}
-          disabled={coins < 5000}
-          className="w-full py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <CreditCard className="w-4 h-4" />
-          Pul yechish
-        </button>
-
-        {coins < 5000 && (
-          <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
-            <AlertCircle className="w-3 h-3" />
-            Minimal yechish: 5,000 tanga = 10,000 so'm
-          </p>
-        )}
-      </div>
-
-      {/* Withdrawal History Section */}
-      <div className="glass-card-elevated p-3 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center shadow-sm">
-            <History className="w-4 h-4 text-white" />
+            <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-1.5">
+                <Gift className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-xs text-foreground">Taklif qilinganlar</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-bold text-foreground">{referralCount}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+              </div>
+            </div>
           </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-semibold text-foreground">Pul yechish tarixi</h3>
-            <p className="text-[10px] text-muted-foreground">So'rovlaringiz holati</p>
+        </>
+      )}
+
+      {activeProfileSection === 'withdrawal' && (
+        <>
+          {/* Payment Schedule Info */}
+          <div className="glass-card-elevated p-3">
+            <div className="flex items-center gap-3 p-2.5 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 rounded-xl border border-red-200/50 dark:border-red-800/30">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center shadow-md">
+                <span className="text-lg">📅</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-red-700 dark:text-red-300">To'lov muddati</p>
+                <p className="text-[11px] text-red-600 dark:text-red-400">
+                  So'rovlar <span className="font-bold">1 kundan 14 kun</span> ichida ko'rib chiqiladi
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-        <WithdrawalHistory />
-      </div>
+
+          {/* Withdrawal Section */}
+          <div className="glass-card-elevated p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-sm">
+                <Banknote className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-foreground">Pul yechish</h3>
+                <p className="text-[10px] text-muted-foreground">Asosiy balansdan pul yeching</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Coins className="w-4 h-4 text-amber-500" />
+                <span className="text-xs text-muted-foreground">Mavjud balans:</span>
+              </div>
+              <span className="text-sm font-bold text-foreground">{coins.toLocaleString()} tanga</span>
+            </div>
+
+            <div className="p-2 bg-muted/30 rounded-lg text-center">
+              <p className="text-[10px] text-muted-foreground">10,000 tanga = 13,000 so'm</p>
+            </div>
+
+            <button
+              onClick={() => setShowWithdrawModal(true)}
+              disabled={coins < 5000}
+              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CreditCard className="w-4 h-4" />
+              Pul yechish
+            </button>
+
+            {coins < 5000 && (
+              <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                Minimal yechish: 5,000 tanga
+              </p>
+            )}
+          </div>
+
+          {/* Withdrawal History Section */}
+          <div className="glass-card-elevated p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center shadow-sm">
+                <History className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-foreground">Pul yechish tarixi</h3>
+                <p className="text-[10px] text-muted-foreground">So'rovlaringiz holati</p>
+              </div>
+            </div>
+            <WithdrawalHistory />
+          </div>
+        </>
+      )}
 
       {/* Withdrawal Modal */}
       <AnimatePresence>
@@ -306,13 +351,20 @@ export const ProfileTab = () => {
               </div>
               
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Hamyon manzili (ixtiyoriy)</label>
+                <label className="text-sm font-medium text-foreground">Karta raqami <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={19}
                   value={walletAddress}
-                  onChange={(e) => setWalletAddress(e.target.value)}
-                  placeholder="Hamyon manzilini kiriting..."
-                  className="w-full px-4 py-3 rounded-xl bg-muted border-0 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary"
+                  onChange={(e) => {
+                    // Format as card number: 1234 5678 9012 3456
+                    const raw = e.target.value.replace(/\D/g, '').slice(0, 16);
+                    const formatted = raw.replace(/(\d{4})(?=\d)/g, '$1 ');
+                    setWalletAddress(formatted);
+                  }}
+                  placeholder="0000 0000 0000 0000"
+                  className="w-full px-4 py-3 rounded-xl bg-muted border-0 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary tracking-widest"
                 />
               </div>
 
