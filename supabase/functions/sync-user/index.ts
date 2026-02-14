@@ -39,30 +39,43 @@ serve(async (req) => {
     
     if (!currentUser) {
       console.log(`[SYNC-USER] User ${telegramId} not found, creating new user`);
-      // Create new user
+      // Create new user - use upsert to handle race conditions
       const { data: newUser, error: createError } = await supabase
         .from("users")
-        .insert({
+        .upsert({
           telegram_id: telegramId,
           first_name: firstName || "",
           last_name: lastName || "",
           username: username || "",
           photo_url: photoUrl || "",
-          coins: 500, // Welcome bonus
-          tickets: 3, // Free tickets for new users
-        })
+          coins: 500,
+          tickets: 3,
+        }, { onConflict: "telegram_id", ignoreDuplicates: true })
         .select()
         .single();
       
       if (createError) {
-        console.error("[SYNC-USER] Error creating user:", createError);
-        return new Response(JSON.stringify({ error: "Failed to create user" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // If upsert still fails, try fetching the existing user
+        console.warn("[SYNC-USER] Upsert failed, fetching existing user:", createError.message);
+        const { data: existingUser, error: fetchErr } = await supabase
+          .from("users")
+          .select("*")
+          .eq("telegram_id", telegramId)
+          .single();
+        
+        if (fetchErr || !existingUser) {
+          console.error("[SYNC-USER] Could not fetch existing user either:", fetchErr);
+          return new Response(JSON.stringify({ error: "Failed to create user" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        currentUser = existingUser;
+        console.log(`[SYNC-USER] Found user after race condition: ${existingUser.id}`);
+      } else {
+        currentUser = newUser;
+        console.log(`[SYNC-USER] Created/found user with id: ${newUser.id}`);
       }
-      currentUser = newUser;
-      console.log(`[SYNC-USER] Created new user with id: ${newUser.id}`);
     } else {
       console.log(`[SYNC-USER] Found existing user: ${currentUser.id}`);
       
