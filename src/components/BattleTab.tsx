@@ -63,6 +63,11 @@ export const BattleTab = () => {
   const telegramUser = getTelegramUser();
   const shownRoundRef = useRef<string | null>(null);
 
+  // Initialize from localStorage once
+  if (shownRoundRef.current === null) {
+    try { shownRoundRef.current = localStorage.getItem('battle_shown_round'); } catch {}
+  }
+
   const fetchData = useCallback(async () => {
     // Don't fetch if selection animation is playing
     if (showSelection) return;
@@ -99,6 +104,7 @@ export const BattleTab = () => {
         const myResult = lp.find(p => p.telegram_id === telegramUser.id);
         if (myResult) {
           shownRoundRef.current = pr.id;
+          try { localStorage.setItem('battle_shown_round', pr.id); } catch {}
           setSelectionParticipants(lp);
           setShowSelection(true);
         }
