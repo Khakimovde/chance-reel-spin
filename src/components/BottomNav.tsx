@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Gamepad2, Egg, ListTodo, History, User } from 'lucide-react';
+import { Gamepad2, Trophy, ListTodo, History, User } from 'lucide-react';
 
 interface BottomNavProps {
   activeTab: string;
@@ -8,7 +8,7 @@ interface BottomNavProps {
 
 const tabs = [
   { id: 'lottery', label: 'O\'yin', icon: Gamepad2 },
-  { id: 'egg', label: 'Tuxum', icon: Egg },
+  { id: 'leaderboard', label: 'Liderlar', icon: Trophy },
   { id: 'mystery', label: 'Vazifalar', icon: ListTodo },
   { id: 'history', label: 'Tarix', icon: History },
   { id: 'profile', label: 'Profil', icon: User },
