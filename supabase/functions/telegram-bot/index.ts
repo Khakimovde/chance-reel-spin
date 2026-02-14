@@ -100,20 +100,30 @@ async function handleAdminStats(message: any) {
   console.log(`[ADMIN] Stats requested by ${userId}`);
   
   try {
-    // Total users
-    const { count: totalUsers } = await supabase
-      .from("users")
-      .select("*", { count: "exact", head: true });
-    
-    // Today's new users
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const { count: todayUsers } = await supabase
-      .from("users")
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", today.toISOString());
+    const todayStr = today.toISOString();
     
-    // Total coins in system (batch)
+    // Run all independent queries in parallel for speed
+    const [
+      totalUsersRes,
+      todayUsersRes,
+      pendingRes,
+      approvedRes,
+      totalReferralsRes,
+      todayGamesRes,
+      dailyStatsRes,
+    ] = await Promise.all([
+      supabase.from("users").select("*", { count: "exact", head: true }),
+      supabase.from("users").select("*", { count: "exact", head: true }).gte("created_at", todayStr),
+      supabase.from("withdrawals").select("*", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("withdrawals").select("*", { count: "exact", head: true }).eq("status", "approved"),
+      supabase.from("referrals").select("*", { count: "exact", head: true }),
+      supabase.from("game_history").select("*", { count: "exact", head: true }).gte("created_at", todayStr),
+      supabase.from("daily_stats").select("ads_watched").eq("date", today.toISOString().split("T")[0]).maybeSingle(),
+    ]);
+    
+    // Total coins - batch (still needed)
     let totalCoins = 0;
     let offset = 0;
     const batchSize = 1000;
@@ -127,28 +137,12 @@ async function handleAdminStats(message: any) {
       } else hasMore = false;
     }
     
-    // Pending withdrawals
-    const { count: pendingWithdrawals } = await supabase
-      .from("withdrawals")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending");
-    
-    // Approved withdrawals
-    const { count: approvedWithdrawals } = await supabase
-      .from("withdrawals")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "approved");
-    
-    // Total paid amount
+    // Total paid - batch
     let totalPaid = 0;
     let paidOffset = 0;
     let paidMore = true;
     while (paidMore) {
-      const { data: paidBatch } = await supabase
-        .from("withdrawals")
-        .select("amount")
-        .eq("status", "paid")
-        .range(paidOffset, paidOffset + batchSize - 1);
+      const { data: paidBatch } = await supabase.from("withdrawals").select("amount").eq("status", "paid").range(paidOffset, paidOffset + batchSize - 1);
       if (paidBatch && paidBatch.length > 0) {
         totalPaid += paidBatch.reduce((s: number, w: any) => s + (w.amount || 0), 0);
         paidOffset += batchSize;
@@ -156,27 +150,34 @@ async function handleAdminStats(message: any) {
       } else paidMore = false;
     }
     
-    // Total referrals
-    const { count: totalReferrals } = await supabase
-      .from("referrals")
-      .select("*", { count: "exact", head: true });
+    // Total ad views - batch (sum of task_watch_ad from all users)
+    let totalAdViews = 0;
+    let adOffset = 0;
+    let adMore = true;
+    while (adMore) {
+      const { data: adBatch } = await supabase.from("users").select("task_watch_ad").range(adOffset, adOffset + batchSize - 1);
+      if (adBatch && adBatch.length > 0) {
+        totalAdViews += adBatch.reduce((s: number, u: any) => s + (u.task_watch_ad || 0), 0);
+        adOffset += batchSize;
+        if (adBatch.length < batchSize) adMore = false;
+      } else adMore = false;
+    }
     
-    // Today's games
-    const { count: todayGames } = await supabase
-      .from("game_history")
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", today.toISOString());
+    const todayAds = dailyStatsRes.data?.ads_watched || 0;
     
     const msg = `📊 <b>Statistika</b>\n\n` +
-      `👥 Jami foydalanuvchilar: <b>${(totalUsers || 0).toLocaleString()}</b>\n` +
-      `🆕 Bugun qo'shilgan: <b>${todayUsers || 0}</b>\n` +
+      `👥 Jami foydalanuvchilar: <b>${(totalUsersRes.count || 0).toLocaleString()}</b>\n` +
+      `🆕 Bugun qo'shilgan: <b>${todayUsersRes.count || 0}</b>\n` +
       `💰 Tizimdagi tangalar: <b>${totalCoins.toLocaleString()}</b>\n\n` +
+      `📺 <b>Reklama</b>\n` +
+      `📺 Jami ko'rishlar: <b>${totalAdViews.toLocaleString()}</b>\n` +
+      `📺 Bugungi ko'rishlar: <b>${todayAds}</b>\n\n` +
       `📤 <b>Pul yechish</b>\n` +
-      `⏳ Kutilmoqda: <b>${pendingWithdrawals || 0}</b>\n` +
-      `✅ Tasdiqlangan: <b>${approvedWithdrawals || 0}</b>\n` +
+      `⏳ Kutilmoqda: <b>${pendingRes.count || 0}</b>\n` +
+      `✅ Tasdiqlangan: <b>${approvedRes.count || 0}</b>\n` +
       `💸 Jami to'langan: <b>${totalPaid.toLocaleString()} tanga</b>\n\n` +
-      `👥 Jami referallar: <b>${(totalReferrals || 0).toLocaleString()}</b>\n` +
-      `🎮 Bugungi o'yinlar: <b>${todayGames || 0}</b>`;
+      `👥 Jami referallar: <b>${(totalReferralsRes.count || 0).toLocaleString()}</b>\n` +
+      `🎮 Bugungi o'yinlar: <b>${todayGamesRes.count || 0}</b>`;
     
     await sendTelegramMessage(userId, msg);
   } catch (err) {
