@@ -64,6 +64,9 @@ export const BattleTab = () => {
   const shownRoundRef = useRef<string | null>(null);
 
   const fetchData = useCallback(async () => {
+    // Don't fetch if selection animation is playing
+    if (showSelection) return;
+    
     try {
       const currentSlot = getCurrentRoundSlot();
       const prevSlot = getPreviousRoundSlot();
@@ -89,7 +92,7 @@ export const BattleTab = () => {
         setHasJoined(false);
       }
 
-      // Check last round for result modal + selection animation
+      // Check last round for result animation
       if (pr && pr.status === 'completed' && telegramUser && shownRoundRef.current !== pr.id) {
         const { data: lastParts } = await supabase.from('battle_participants').select('*').eq('round_id', pr.id);
         const lp = (lastParts || []) as Participant[];
@@ -105,7 +108,7 @@ export const BattleTab = () => {
     } finally {
       setLoading(false);
     }
-  }, [telegramUser]);
+  }, [telegramUser, showSelection]);
 
   useEffect(() => {
     const update = () => {
