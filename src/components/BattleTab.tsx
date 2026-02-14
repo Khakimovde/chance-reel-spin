@@ -151,10 +151,10 @@ export const BattleTab = () => {
     return () => clearInterval(interval);
   }, [fetchData, triggerProcess]);
 
-  // Polling
+  // Polling - reduced to 30s to avoid DB overload
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
