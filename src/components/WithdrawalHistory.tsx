@@ -22,7 +22,7 @@ interface Withdrawal {
   rejection_reason?: string | null;
 }
 
-const COIN_TO_SOM_RATE = 2; // 1 tanga = 2 som
+const COIN_TO_SOM_RATE = 1.3; // 10000 tanga = 13000 som
 
 export const WithdrawalHistory = () => {
   const { user } = useTelegram();

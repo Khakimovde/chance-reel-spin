@@ -227,7 +227,10 @@ async function handleStart(message: any) {
   const keyboard = {
     inline_keyboard: [
       [{ text: "🎲 Lotoreya", web_app: { url: MINI_APP_URL } }],
-      [{ text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL }],
+      [
+        { text: "📕 Qoidalar", callback_data: "show_rules" },
+        { text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL },
+      ],
     ],
   };
   
@@ -352,7 +355,7 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
     
     // Check if task bonus should be given (when reaching exactly 2 referrals in current task period)
     if (newTaskCount === 2 && currentTaskCount < 2) {
-      totalReward += 160; // Task bonus: 160 coins for completing 2 invites
+      totalReward += 100; // Task bonus: 100 coins for completing 2 invites
       taskBonusGiven = true;
       console.log(`[REFERRAL] Task bonus triggered! +160 coins`);
     }
@@ -384,7 +387,7 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
     // Notify referrer
     let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${newUserName} sizning havolangiz orqali qo'shildi.\n💰 +${profileReward} tanga qo'shildi!`;
     if (taskBonusGiven) {
-      notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +160 bonus tanga qo'shildi!`;
+      notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +100 bonus tanga qo'shildi!`;
     }
     notifyMessage += `\n\n📊 Jami referallar: ${newReferralCount}`;
     
@@ -435,7 +438,10 @@ async function handleSubscriptionCheck(callbackQuery: any) {
   const keyboard = {
     inline_keyboard: [
       [{ text: "🎲 Lotoreya", web_app: { url: MINI_APP_URL } }],
-      [{ text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL }],
+      [
+        { text: "📕 Qoidalar", callback_data: "show_rules" },
+        { text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL },
+      ],
     ],
   };
   
@@ -637,6 +643,72 @@ async function handleWithdrawalAction(callbackQuery: any) {
   console.log(`[WITHDRAWAL] Admin message updated`);
 }
 
+async function handleShowRules(callbackQuery: any) {
+  const telegramId = callbackQuery.from.id;
+  const messageId = callbackQuery.message?.message_id;
+  
+  const rulesText = `📕 <b>O'yin qoidalari</b>\n\n` +
+    `🎲 <b>Lotoreya</b>\n` +
+    `• Har 15 daqiqada qur'a o'tkaziladi\n` +
+    `• 1 dan 36 gacha 7 ta raqam tanlang\n` +
+    `• Har bir ishtirok uchun 1 ta chipta kerak\n` +
+    `• Mos kelgan raqamlar soni bo'yicha mukofot beriladi\n\n` +
+    `💰 <b>Tanga ishlash yo'llari</b>\n` +
+    `• Reklama ko'rish (har 2 soatda yangilanadi)\n` +
+    `• Do'stlarni taklif qilish (+50 tanga)\n` +
+    `• Kanallarga obuna bo'lish\n` +
+    `• G'ildirak aylantirish\n` +
+    `• AR o'yinlar\n\n` +
+    `💸 <b>Pul yechish</b>\n` +
+    `• Minimal yechish: 10,000 tanga\n` +
+    `• 10,000 tanga = 13,000 so'm\n` +
+    `• So'rov 1-14 kun ichida ko'rib chiqiladi\n` +
+    `• Karta raqami kiritish majburiy (16 raqam)\n\n` +
+    `👥 <b>Referal tizimi</b>\n` +
+    `• Har bir do'st uchun: 50 tanga\n` +
+    `• Yangi foydalanuvchiga: 300 tanga bonus\n` +
+    `• Do'st kanalga obuna bo'lgandan so'ng hisoblanadi`;
+  
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "⬅️ Asosiy menuga qaytish", callback_data: "back_to_menu" }],
+    ],
+  };
+  
+  if (messageId) {
+    await editTelegramMessage(telegramId, messageId, rulesText, keyboard);
+  } else {
+    await sendTelegramMessage(telegramId, rulesText, keyboard);
+  }
+}
+
+async function handleBackToMenu(callbackQuery: any) {
+  const telegramId = callbackQuery.from.id;
+  const messageId = callbackQuery.message?.message_id;
+  const firstName = callbackQuery.from.first_name || "";
+  
+  const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
+  const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
+  
+  const welcomeMessage = `👋 Salom, <b>${firstName}</b> 🌿!\n\n🎉 Xush kelibsiz!\n\n🎲 Bepul o'yini omadingizni sinab ko'ring va real daromadga ega bo'ling`;
+  
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "🎲 Lotoreya", web_app: { url: MINI_APP_URL } }],
+      [
+        { text: "📕 Qoidalar", callback_data: "show_rules" },
+        { text: "✉️ Aloqa uchun", url: SUPPORT_BOT_URL },
+      ],
+    ],
+  };
+  
+  if (messageId) {
+    await editTelegramMessage(telegramId, messageId, welcomeMessage, keyboard);
+  } else {
+    await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -663,6 +735,10 @@ serve(async (req) => {
       const callbackData = body.callback_query.data || "";
       if (callbackData.startsWith("check_sub_")) {
         await handleSubscriptionCheck(body.callback_query);
+      } else if (callbackData === "show_rules") {
+        await handleShowRules(body.callback_query);
+      } else if (callbackData === "back_to_menu") {
+        await handleBackToMenu(body.callback_query);
       } else {
         await handleWithdrawalAction(body.callback_query);
       }
