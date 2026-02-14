@@ -61,8 +61,7 @@ export const LeaderboardTab = () => {
   const top3 = leaders.slice(0, 3);
   const rest = leaders.slice(3);
 
-  // Podium order: [1st, 2nd, 3rd] - top to bottom
-  const podiumSizes = ['w-14 h-14', 'w-12 h-12', 'w-11 h-11'];
+  // Podium order: 2nd | 1st | 3rd (classic podium row)
 
   if (loading) {
     return (
@@ -108,48 +107,49 @@ export const LeaderboardTab = () => {
         </motion.div>
       )}
 
-      {/* Compact Podium - Top 3 */}
+      {/* Podium - Top 3 in row: 2nd | 1st (elevated) | 3rd */}
       {top3.length >= 3 && (
-        <div className="glass-card-elevated p-3 space-y-1.5">
-          {top3.map((user, i) => {
-            const colors = PODIUM_COLORS[i];
-            const isMe = telegramUser && user.telegram_id === telegramUser.id;
-            return (
-              <motion.div
-                key={user.id}
-                className={`flex items-center gap-3 p-2 rounded-xl ${isMe ? 'bg-primary/5 ring-1 ring-primary/20' : ''}`}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${colors.bg} flex items-center justify-center shrink-0 shadow-sm`}>
-                  {i === 0 ? (
-                    <Crown className="w-4 h-4 text-white" />
-                  ) : (
-                    <span className="text-white font-black text-sm">#{i + 1}</span>
+        <div className="glass-card-elevated p-4">
+          <div className="flex items-end justify-center gap-2">
+            {/* 2nd place - left */}
+            {[top3[1], top3[0], top3[2]].map((user, idx) => {
+              const podiumIdx = idx === 0 ? 1 : idx === 1 ? 0 : 2;
+              const colors = PODIUM_COLORS[podiumIdx];
+              const isMe = telegramUser && user.telegram_id === telegramUser.id;
+              const isFirst = podiumIdx === 0;
+              const avatarSize = isFirst ? 'w-16 h-16' : 'w-12 h-12';
+              const pedestal = isFirst ? 'pt-0 pb-2' : 'pt-4 pb-2';
+
+              return (
+                <motion.div
+                  key={user.id}
+                  className={`flex flex-col items-center flex-1 ${pedestal} ${isMe ? 'relative' : ''}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: podiumIdx * 0.15 }}
+                >
+                  {isFirst && (
+                    <Crown className="w-5 h-5 text-amber-400 mb-1" />
                   )}
-                </div>
-                <div className={`relative ${podiumSizes[i]} rounded-full ring-2 ${colors.ring} p-0.5 shrink-0`}>
-                  <img src={getAvatar(user)} alt="" className="w-full h-full rounded-full object-cover" />
-                  <div className="absolute -bottom-1 -right-1 text-xs">{colors.label}</div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm truncate">
-                    {getDisplayName(user)}
-                    {isMe && <span className="text-primary text-[10px] ml-1">(Siz)</span>}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <TelegramIcon />
-                    <span className="text-[10px] text-muted-foreground">{user.telegram_id}</span>
+                  <div className={`relative ${avatarSize} rounded-full ring-2 ${colors.ring} p-0.5`}>
+                    <img src={getAvatar(user)} alt="" className="w-full h-full rounded-full object-cover" />
+                    <div className="absolute -bottom-1 -right-1 text-sm">{colors.label}</div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/50 px-2 py-1 rounded-full shrink-0">
-                  <Coins className="w-3 h-3 text-amber-500" />
-                  <span className="text-xs font-bold text-amber-700">{user.coins.toLocaleString()}</span>
-                </div>
-              </motion.div>
-            );
-          })}
+                  <p className={`font-bold truncate max-w-[80px] text-center mt-1.5 ${isFirst ? 'text-xs' : 'text-[11px]'}`}>
+                    {getDisplayName(user)}
+                    {isMe && <span className="text-primary text-[9px] ml-0.5">(Siz)</span>}
+                  </p>
+                  <div className="flex items-center gap-0.5 mt-0.5">
+                    <Coins className="w-3 h-3 text-amber-500" />
+                    <span className="text-[10px] font-bold text-amber-700">{user.coins.toLocaleString()}</span>
+                  </div>
+                  <div className={`w-full mt-1.5 rounded-t-lg bg-gradient-to-br ${colors.bg} flex items-center justify-center ${isFirst ? 'h-14' : podiumIdx === 1 ? 'h-10' : 'h-8'}`}>
+                    <span className="text-white font-black text-sm">#{podiumIdx + 1}</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       )}
 
