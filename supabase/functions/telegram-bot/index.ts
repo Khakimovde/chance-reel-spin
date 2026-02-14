@@ -837,27 +837,37 @@ async function handleShowRules(callbackQuery: any) {
   const telegramId = callbackQuery.from.id;
   const messageId = callbackQuery.message?.message_id;
   
-  const rulesText = `📕 <b>O'yin qoidalari</b>\n\n` +
-    `🎲 <b>Lotoreya</b>\n` +
-    `• Har 15 daqiqada qur'a o'tkaziladi\n` +
-    `• 1 dan 36 gacha 7 ta raqam tanlang\n` +
-    `• Har bir ishtirok uchun 1 ta chipta kerak\n` +
-    `• Mos kelgan raqamlar soni bo'yicha mukofot beriladi\n\n` +
-    `💰 <b>Tanga ishlash yo'llari</b>\n` +
-    `• Reklama ko'rish (har 6 soatda yangilanadi)\n` +
-    `• Do'stlarni taklif qilish (+50 tanga)\n` +
-    `• Kanallarga obuna bo'lish\n` +
-    `• G'ildirak aylantirish\n` +
-    `• AR o'yinlar\n\n` +
-    `💸 <b>Pul yechish</b>\n` +
-    `• Minimal yechish: 10,000 tanga\n` +
-    `• 10,000 tanga = 13,000 so'm\n` +
-    `• So'rov 1-14 kun ichida ko'rib chiqiladi\n` +
-    `• Karta raqami kiritish majburiy (16 raqam)\n\n` +
-    `👥 <b>Referal tizimi</b>\n` +
-    `• Har bir do'st uchun: 50 tanga\n` +
-    `• Yangi foydalanuvchiga: 300 tanga bonus\n` +
-    `• Do'st kanalga obuna bo'lgandan so'ng hisoblanadi`;
+  const rulesText = 
+    "📕 <b>O'yin qoidalari va foydalanish shartlari</b>\n\n" +
+    "🎲 <b>Lotoreya</b>\n" +
+    "• Har 15 daqiqada avtomatik qur'a o'tkaziladi\n" +
+    "• 1 dan 42 gacha 7 ta raqam tanlanadi\n" +
+    "• Har bir ishtirok uchun 1 ta reklama ko'rish talab qilinadi\n" +
+    "• Mos kelgan raqamlar soniga qarab mukofot beriladi\n" +
+    "• Natijalar avtomatik tizim orqali aniqlanadi\n\n" +
+    "💰 <b>Tanga ishlash yo'llari</b>\n" +
+    "• Reklama ko'rish (har 6 soatda yangilanadi)\n" +
+    "• Do'stlarni taklif qilish (+50 tanga)\n" +
+    "• Hamkor kanallarga obuna bo'lish\n" +
+    "• G'ildirak aylantirish\n" +
+    "• AR o'yinlarda ishtirok etish\n" +
+    "• Maxsus aksiyalar va bonus dasturlari\n\n" +
+    "💸 <b>Pul yechish</b>\n" +
+    "• Minimal yechish miqdori: 10 000 tanga\n" +
+    "• 10 000 tanga = 17 000 so'm\n" +
+    "• Pul yechish uchun 16 xonali karta raqami kiritish majburiy\n" +
+    "• So'rovlar 1-14 ish kuni ichida ko'rib chiqiladi\n" +
+    "• To'lovlar hamkor kompaniyalardan mablag' kelib tushishiga qarab amalga oshiriladi\n" +
+    "• Tekshiruv jarayoni sababli to'lov muddati uzayishi mumkin\n\n" +
+    "👥 <b>Referal tizimi</b>\n" +
+    "• Har bir taklif qilingan do'st uchun: 50 tanga\n" +
+    "• Yangi foydalanuvchiga: 300 tanga bonus\n" +
+    "• Bonus do'st kanalga obuna bo'lgandan so'ng hisoblanadi\n" +
+    "• Soxta akkauntlar aniqlansa, bonuslar bekor qilinadi\n\n" +
+    "⚖️ <b>Qo'shimcha qoidalar</b>\n" +
+    "• Bir nechta akkaunt ochish taqiqlanadi\n" +
+    "• Qoidalarni buzgan foydalanuvchi bloklanishi mumkin\n" +
+    "• Platforma qoidalarni o'zgartirish huquqini saqlab qoladi";
   
   const keyboard = {
     inline_keyboard: [
