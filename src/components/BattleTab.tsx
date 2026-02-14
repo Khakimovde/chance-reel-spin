@@ -230,6 +230,7 @@ export const BattleTab = () => {
         participants={selectionParticipants}
         isOpen={showSelection}
         onComplete={handleSelectionComplete}
+        myTelegramId={telegramUser?.id}
       />
 
       {/* Result modal */}
