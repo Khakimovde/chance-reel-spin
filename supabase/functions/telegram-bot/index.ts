@@ -13,6 +13,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// Track admin states (broadcast mode)
+const adminStates = new Map<number, string>();
+
 async function sendTelegramMessage(chatId: string | number, text: string, replyMarkup?: any) {
   const body: any = {
     chat_id: chatId,
@@ -24,6 +27,22 @@ async function sendTelegramMessage(chatId: string | number, text: string, replyM
   }
   
   const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
+async function sendTelegramPhoto(chatId: string | number, photoFileId: string, caption?: string) {
+  const body: any = {
+    chat_id: chatId,
+    photo: photoFileId,
+    parse_mode: "HTML",
+  };
+  if (caption) body.caption = caption;
+  
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -49,14 +68,240 @@ async function editTelegramMessage(chatId: string | number, messageId: number, t
   });
 }
 
+// ============ ADMIN COMMAND ============
+
+async function handleAdminCommand(message: any) {
+  const userId = message.from.id;
+  
+  if (String(userId) !== String(TELEGRAM_ADMIN_ID)) {
+    await sendTelegramMessage(userId, "⛔ Sizda admin huquqi yo'q");
+    return;
+  }
+
+  console.log(`[ADMIN] Admin ${userId} opened admin panel`);
+  
+  // Send admin menu with reply keyboard
+  const keyboard = {
+    keyboard: [
+      [{ text: "📨 Xabar yuborish" }, { text: "📊 Statistika" }],
+      [{ text: "❌ Admin panelni yopish" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+  
+  await sendTelegramMessage(userId, "🔧 <b>Admin panel</b>\n\nQuyidagi tugmalardan birini tanlang:", keyboard);
+}
+
+async function handleAdminStats(message: any) {
+  const userId = message.from.id;
+  if (String(userId) !== String(TELEGRAM_ADMIN_ID)) return;
+  
+  console.log(`[ADMIN] Stats requested by ${userId}`);
+  
+  try {
+    // Total users
+    const { count: totalUsers } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true });
+    
+    // Today's new users
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const { count: todayUsers } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", today.toISOString());
+    
+    // Total coins in system (batch)
+    let totalCoins = 0;
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: batch } = await supabase.from("users").select("coins").range(offset, offset + batchSize - 1);
+      if (batch && batch.length > 0) {
+        totalCoins += batch.reduce((s: number, u: any) => s + (u.coins || 0), 0);
+        offset += batchSize;
+        if (batch.length < batchSize) hasMore = false;
+      } else hasMore = false;
+    }
+    
+    // Pending withdrawals
+    const { count: pendingWithdrawals } = await supabase
+      .from("withdrawals")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending");
+    
+    // Approved withdrawals
+    const { count: approvedWithdrawals } = await supabase
+      .from("withdrawals")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "approved");
+    
+    // Total paid amount
+    let totalPaid = 0;
+    let paidOffset = 0;
+    let paidMore = true;
+    while (paidMore) {
+      const { data: paidBatch } = await supabase
+        .from("withdrawals")
+        .select("amount")
+        .eq("status", "paid")
+        .range(paidOffset, paidOffset + batchSize - 1);
+      if (paidBatch && paidBatch.length > 0) {
+        totalPaid += paidBatch.reduce((s: number, w: any) => s + (w.amount || 0), 0);
+        paidOffset += batchSize;
+        if (paidBatch.length < batchSize) paidMore = false;
+      } else paidMore = false;
+    }
+    
+    // Total referrals
+    const { count: totalReferrals } = await supabase
+      .from("referrals")
+      .select("*", { count: "exact", head: true });
+    
+    // Today's games
+    const { count: todayGames } = await supabase
+      .from("game_history")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", today.toISOString());
+    
+    const msg = `📊 <b>Statistika</b>\n\n` +
+      `👥 Jami foydalanuvchilar: <b>${(totalUsers || 0).toLocaleString()}</b>\n` +
+      `🆕 Bugun qo'shilgan: <b>${todayUsers || 0}</b>\n` +
+      `💰 Tizimdagi tangalar: <b>${totalCoins.toLocaleString()}</b>\n\n` +
+      `📤 <b>Pul yechish</b>\n` +
+      `⏳ Kutilmoqda: <b>${pendingWithdrawals || 0}</b>\n` +
+      `✅ Tasdiqlangan: <b>${approvedWithdrawals || 0}</b>\n` +
+      `💸 Jami to'langan: <b>${totalPaid.toLocaleString()} tanga</b>\n\n` +
+      `👥 Jami referallar: <b>${(totalReferrals || 0).toLocaleString()}</b>\n` +
+      `🎮 Bugungi o'yinlar: <b>${todayGames || 0}</b>`;
+    
+    await sendTelegramMessage(userId, msg);
+  } catch (err) {
+    console.error("[ADMIN] Stats error:", err);
+    await sendTelegramMessage(userId, "❌ Statistikani olishda xatolik");
+  }
+}
+
+async function handleBroadcastStart(message: any) {
+  const userId = message.from.id;
+  if (String(userId) !== String(TELEGRAM_ADMIN_ID)) return;
+  
+  adminStates.set(userId, "waiting_broadcast");
+  console.log(`[ADMIN] Broadcast mode started by ${userId}`);
+  
+  const keyboard = {
+    keyboard: [
+      [{ text: "❌ Bekor qilish" }],
+    ],
+    resize_keyboard: true,
+  };
+  
+  await sendTelegramMessage(userId, "📨 <b>Xabar yuborish</b>\n\n✏️ Endi xabar matnini yuboring.\n\n📷 Rasm bilan yuborishingiz ham mumkin (rasmga caption yozing).\n\n❌ Bekor qilish uchun tugmani bosing.", keyboard);
+}
+
+async function handleBroadcastMessage(message: any) {
+  const userId = message.from.id;
+  
+  console.log(`[BROADCAST] Processing broadcast from admin ${userId}`);
+  
+  // Clear state
+  adminStates.delete(userId);
+  
+  // Get all users
+  let allUsers: any[] = [];
+  let offset = 0;
+  const batchSize = 1000;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const { data: batch } = await supabase
+      .from("users")
+      .select("telegram_id")
+      .eq("is_blocked", false)
+      .range(offset, offset + batchSize - 1);
+    if (batch && batch.length > 0) {
+      allUsers = allUsers.concat(batch);
+      offset += batchSize;
+      if (batch.length < batchSize) hasMore = false;
+    } else hasMore = false;
+  }
+  
+  const total = allUsers.length;
+  await sendTelegramMessage(userId, `📤 Xabar ${total} ta foydalanuvchiga yuborilmoqda...`);
+  
+  let sent = 0;
+  let failed = 0;
+  
+  const hasPhoto = message.photo && message.photo.length > 0;
+  const caption = message.caption || "";
+  const text = message.text || "";
+  const photoFileId = hasPhoto ? message.photo[message.photo.length - 1].file_id : null;
+  
+  for (const user of allUsers) {
+    try {
+      if (hasPhoto && photoFileId) {
+        await sendTelegramPhoto(user.telegram_id, photoFileId, caption);
+      } else if (text) {
+        await sendTelegramMessage(user.telegram_id, text);
+      }
+      sent++;
+    } catch (e) {
+      failed++;
+    }
+    // Small delay to avoid rate limiting
+    if (sent % 30 === 0) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  
+  // Restore admin keyboard
+  const keyboard = {
+    keyboard: [
+      [{ text: "📨 Xabar yuborish" }, { text: "📊 Statistika" }],
+      [{ text: "❌ Admin panelni yopish" }],
+    ],
+    resize_keyboard: true,
+  };
+  
+  await sendTelegramMessage(userId, `✅ <b>Xabar yuborildi!</b>\n\n📤 Yuborildi: ${sent}\n❌ Xato: ${failed}\n📊 Jami: ${total}`, keyboard);
+  console.log(`[BROADCAST] Done: sent=${sent}, failed=${failed}, total=${total}`);
+}
+
+async function handleCancelBroadcast(message: any) {
+  const userId = message.from.id;
+  adminStates.delete(userId);
+  
+  const keyboard = {
+    keyboard: [
+      [{ text: "📨 Xabar yuborish" }, { text: "📊 Statistika" }],
+      [{ text: "❌ Admin panelni yopish" }],
+    ],
+    resize_keyboard: true,
+  };
+  
+  await sendTelegramMessage(userId, "❌ Xabar yuborish bekor qilindi.", keyboard);
+}
+
+async function handleCloseAdmin(message: any) {
+  const userId = message.from.id;
+  adminStates.delete(userId);
+  
+  // Remove reply keyboard
+  const removeKeyboard = { remove_keyboard: true };
+  await sendTelegramMessage(userId, "✅ Admin panel yopildi.", removeKeyboard);
+}
+
+// ============ EXISTING FUNCTIONS ============
+
 async function handleUsersCommand(message: any) {
   const adminId = message.from.id;
   const configuredAdminId = TELEGRAM_ADMIN_ID;
   
   console.log(`[USERS] Received /users command from ${adminId}, configured admin ID: "${configuredAdminId}"`);
-  console.log(`[USERS] Comparison: String(${adminId}) === "${configuredAdminId}" = ${String(adminId) === configuredAdminId}`);
   
-  // Check if admin - compare as strings
   if (String(adminId) !== String(configuredAdminId)) {
     console.log(`[USERS] Unauthorized access attempt by ${adminId}`);
     await sendTelegramMessage(adminId, "⛔ Sizda admin huquqi yo'q");
@@ -66,16 +311,10 @@ async function handleUsersCommand(message: any) {
   console.log(`[USERS] Admin ${adminId} requesting users list`);
   
   try {
-    // Get total count using COUNT (avoids 1000 row limit)
-    const { count: totalCount, error: countError } = await supabase
+    const { count: totalCount } = await supabase
       .from("users")
       .select("*", { count: "exact", head: true });
     
-    if (countError) {
-      console.error("[USERS] Count error:", countError);
-    }
-    
-    // Get top 50 users by coins
     const { data: topUsers, error } = await supabase
       .from("users")
       .select("telegram_id, username, first_name, last_name, coins, referral_count, tickets, total_winnings, task_watch_ad, task_invite_friend, created_at")
@@ -88,7 +327,6 @@ async function handleUsersCommand(message: any) {
       return;
     }
     
-    // Get today's new users count
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const { count: todayCount } = await supabase
@@ -96,33 +334,23 @@ async function handleUsersCommand(message: any) {
       .select("*", { count: "exact", head: true })
       .gte("created_at", today.toISOString());
     
-    // Get total coins in system (batch fetch to avoid 1000 limit)
     let totalCoins = 0;
     let offset = 0;
     const batchSize = 1000;
     let hasMore = true;
-    
     while (hasMore) {
-      const { data: coinsBatch } = await supabase
-        .from("users")
-        .select("coins")
-        .range(offset, offset + batchSize - 1);
-      
+      const { data: coinsBatch } = await supabase.from("users").select("coins").range(offset, offset + batchSize - 1);
       if (coinsBatch && coinsBatch.length > 0) {
         totalCoins += coinsBatch.reduce((sum: number, u: any) => sum + (u.coins || 0), 0);
         offset += batchSize;
         if (coinsBatch.length < batchSize) hasMore = false;
-      } else {
-        hasMore = false;
-      }
+      } else hasMore = false;
     }
     
-    // Format message
     let msg = `📊 <b>Foydalanuvchilar statistikasi</b>\n\n`;
     msg += `👥 Jami foydalanuvchilar: <b>${totalCount?.toLocaleString() || 0}</b>\n`;
     msg += `🆕 Bugun qo'shilgan: <b>${todayCount || 0}</b>\n`;
     msg += `💰 Tizimdagi jami tangalar: <b>${totalCoins.toLocaleString()}</b>\n\n`;
-    
     msg += `🏆 <b>Top 50 foydalanuvchi:</b>\n\n`;
     
     topUsers?.forEach((user: any, index: number) => {
@@ -134,7 +362,6 @@ async function handleUsersCommand(message: any) {
       msg += `   🏆 Yutug': ${user.total_winnings} | 📺 Reklama: ${user.task_watch_ad}\n\n`;
     });
     
-    // Telegram has 4096 char limit
     if (msg.length > 4000) {
       msg = msg.substring(0, 3900) + "\n\n... (davomi cheklov sababli qisqartirildi)";
     }
@@ -177,12 +404,10 @@ async function handleStart(message: any) {
   
   console.log(`[START] User ${telegramId} (${firstName}) starting bot`);
   
-  // Mini app and support bot URLs
   const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
   const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
   const REQUIRED_CHANNEL = "@LuckyGame_uz";
   
-  // Parse referral info from /start command
   const text = message.text || "";
   let refTelegramId: string | null = null;
   
@@ -194,19 +419,15 @@ async function handleStart(message: any) {
     }
   }
   
-  // Check if user already exists
   const { data: existingUser } = await supabase
     .from("users")
     .select("*")
     .eq("telegram_id", telegramId)
     .maybeSingle();
   
-  // ALWAYS check channel subscription first
   const isSubscribed = await checkChannelSubscription(telegramId, REQUIRED_CHANNEL);
   
   if (!isSubscribed) {
-    // Not subscribed - show subscription required message
-    // Pass refTelegramId so we can process referral AFTER subscription is confirmed
     console.log(`[START] User ${telegramId} not subscribed to ${REQUIRED_CHANNEL}`);
     const subscriptionMessage = `📢 <b>Kanalga obuna bo'ling!</b>\n\n🎁 Lotoreyadan foydalanish uchun avval kanalimizga obuna bo'lishingiz kerak.\n\n👉 <a href="https://t.me/${REQUIRED_CHANNEL.replace('@', '')}">${REQUIRED_CHANNEL}</a>\n\n✅ Obuna bo'lgandan so'ng "Tekshirish" tugmasini bosing.`;
     
@@ -221,7 +442,6 @@ async function handleStart(message: any) {
     return;
   }
   
-  // User IS subscribed - proceed
   const welcomeMessage = `👋 Salom, <b>${firstName}</b> 🌿!\n\n🎉 Xush kelibsiz!\n\n🎲 Bepul o'yini omadingizni sinab ko'ring va real daromadga ega bo'ling`;
   
   const keyboard = {
@@ -240,7 +460,6 @@ async function handleStart(message: any) {
     return;
   }
   
-  // New user - resolve referrer if present
   let referredBy: string | null = null;
   let referrerTelegramId: number | null = null;
   
@@ -258,7 +477,6 @@ async function handleStart(message: any) {
     }
   }
   
-  // Create new user with 300 coins welcome bonus
   console.log(`[START] Creating new user ${telegramId}`);
   const { data: newUser, error } = await supabase
     .from("users")
@@ -283,19 +501,16 @@ async function handleStart(message: any) {
   
   console.log(`[START] User ${telegramId} created successfully with id: ${newUser.id}`);
   
-  // Process referral reward (user already passed subscription check)
   if (referredBy && referrerTelegramId) {
     await processReferralReward(referredBy, referrerTelegramId, newUser.id, firstName);
   }
   
-  // Send welcome message with buttons
   await sendTelegramMessage(telegramId, welcomeMessage, keyboard);
 }
 
 async function processReferralReward(referrerId: string, referrerTelegramId: number, newUserId: string, newUserName: string) {
   console.log(`[REFERRAL] Processing referral reward for referrer ${referrerId}`);
   
-  // Create referral record
   const { error: refError } = await supabase.from("referrals").insert({
     referrer_id: referrerId,
     referred_id: newUserId,
@@ -307,7 +522,6 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
     console.log("[REFERRAL] Referral record created");
   }
   
-  // Get referrer's current data
   const { data: referrerData } = await supabase
     .from("users")
     .select("coins, referral_count, task_invite_friend, last_task_reset")
@@ -315,16 +529,14 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
     .single();
   
   if (referrerData) {
-    // Profile referral reward: 50 coins (unlimited)
     const profileReward = 50;
     const newReferralCount = referrerData.referral_count + 1;
     
     console.log(`[REFERRAL] Referrer current stats - coins: ${referrerData.coins}, referral_count: ${referrerData.referral_count}, task_invite_friend: ${referrerData.task_invite_friend}`);
     
-  // Check if task needs reset first (2-hour reset)
     const now = new Date();
     const currentHour = now.getHours();
-    const resetHours = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
+    const resetHours = [0, 6, 12, 18];
     
     let prevResetHour = 0;
     for (const h of resetHours) {
@@ -339,38 +551,32 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
     const lastTaskReset = referrerData.last_task_reset ? new Date(referrerData.last_task_reset) : null;
     const shouldResetTasks = !lastTaskReset || prevResetTime.getTime() > lastTaskReset.getTime();
     
-    // Calculate task count after potential reset
     let currentTaskCount = referrerData.task_invite_friend;
     if (shouldResetTasks) {
       currentTaskCount = 0;
-      console.log(`[REFERRAL] Task reset triggered for referrer (2-hour period)`);
+      console.log(`[REFERRAL] Task reset triggered for referrer (6-hour period)`);
     }
     
-    // Only increment task_invite_friend if under 2 (max for task period)
     const newTaskCount = Math.min(currentTaskCount + 1, 2);
     
-    // Calculate total reward
-    let totalReward = profileReward; // Always give 50 for profile referral
+    let totalReward = profileReward;
     let taskBonusGiven = false;
     
-    // Check if task bonus should be given (when reaching exactly 2 referrals in current task period)
     if (newTaskCount === 2 && currentTaskCount < 2) {
-      totalReward += 100; // Task bonus: 100 coins for completing 2 invites
+      totalReward += 100;
       taskBonusGiven = true;
-      console.log(`[REFERRAL] Task bonus triggered! +160 coins`);
+      console.log(`[REFERRAL] Task bonus triggered! +100 coins`);
     }
     
-    // Update referrer's data
     const updateData: any = { 
       coins: referrerData.coins + totalReward,
       referral_count: newReferralCount,
       task_invite_friend: newTaskCount
     };
     
-    // If reset was needed, also update last_task_reset
     if (shouldResetTasks) {
       updateData.last_task_reset = now.toISOString();
-      updateData.task_watch_ad = 0; // Also reset ads
+      updateData.task_watch_ad = 0;
     }
     
     const { error: updateError } = await supabase
@@ -384,7 +590,6 @@ async function processReferralReward(referrerId: string, referrerTelegramId: num
       console.log(`[REFERRAL] Referrer updated - new coins: ${referrerData.coins + totalReward}, new referral_count: ${newReferralCount}, task_invite_friend: ${newTaskCount}`);
     }
     
-    // Notify referrer
     let notifyMessage = `🎉 <b>Yangi referal!</b>\n\n${newUserName} sizning havolangiz orqali qo'shildi.\n💰 +${profileReward} tanga qo'shildi!`;
     if (taskBonusGiven) {
       notifyMessage += `\n\n🏆 <b>Vazifa bajarildi!</b>\n2 ta do'st taklif qildingiz!\n💰 +100 bonus tanga qo'shildi!`;
@@ -409,24 +614,19 @@ async function handleSubscriptionCheck(callbackQuery: any) {
   const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
   const SUPPORT_BOT_URL = "https://t.me/Xakimovsupport_bot";
   
-  // Parse referral telegram_id from callback data: check_sub_reftg_<telegram_id>
   const parts = data.split("_");
-  // Format: check_sub_reftg_<telegramId>
   const refTelegramIdStr = parts[3] !== 'none' ? parts[3] : null;
   
   const isSubscribed = await checkChannelSubscription(telegramId, REQUIRED_CHANNEL);
   
   if (!isSubscribed) {
-    // Still not subscribed
     console.log(`[SUBSCRIPTION CHECK] User ${telegramId} still not subscribed`);
     await sendTelegramMessage(telegramId, "❌ Siz hali kanalga obuna bo'lmagansiz!\n\n📢 Iltimos, avval kanalga obuna bo'ling va qaytadan tekshiring.");
     return;
   }
   
-  // User is now subscribed!
   console.log(`[SUBSCRIPTION CHECK] User ${telegramId} is now subscribed!`);
   
-  // Check if user exists
   const { data: existingUser } = await supabase
     .from("users")
     .select("*")
@@ -446,7 +646,6 @@ async function handleSubscriptionCheck(callbackQuery: any) {
   };
   
   if (existingUser) {
-    // User already exists, just update message
     if (messageId) {
       await editTelegramMessage(telegramId, messageId, welcomeMessage, keyboard);
     } else {
@@ -455,7 +654,6 @@ async function handleSubscriptionCheck(callbackQuery: any) {
     return;
   }
   
-  // Resolve referrer from telegram_id
   let referredBy: string | null = null;
   let referrerTelegramId: number | null = null;
   
@@ -473,7 +671,6 @@ async function handleSubscriptionCheck(callbackQuery: any) {
     }
   }
   
-  // Create new user
   console.log(`[SUBSCRIPTION CHECK] Creating new user ${telegramId}`);
   const { data: newUser, error } = await supabase
     .from("users")
@@ -497,12 +694,10 @@ async function handleSubscriptionCheck(callbackQuery: any) {
   
   console.log(`[SUBSCRIPTION CHECK] User ${telegramId} created with id: ${newUser.id}`);
   
-  // Process referral reward - user has passed subscription check
   if (referredBy && referrerTelegramId) {
     await processReferralReward(referredBy, referrerTelegramId, newUser.id, firstName);
   }
   
-  // Update message with welcome
   if (messageId) {
     await editTelegramMessage(telegramId, messageId, welcomeMessage, keyboard);
   } else {
@@ -554,7 +749,6 @@ async function handleWithdrawalAction(callbackQuery: any) {
   const withdrawalIdClean = actualId;
   console.log(`[WITHDRAWAL] Processing withdrawal ${withdrawalIdClean} with action ${action}`);
   
-  // Get withdrawal info first
   const { data: withdrawal, error: fetchError } = await supabase
     .from("withdrawals")
     .select("*, user:users(*)")
@@ -569,7 +763,6 @@ async function handleWithdrawalAction(callbackQuery: any) {
   
   console.log(`[WITHDRAWAL] Found withdrawal: amount=${withdrawal.amount}, status=${withdrawal.status}, user_id=${withdrawal.user_id}`);
   
-  // If rejecting, return coins to user
   if (action === "reject") {
     const { data: userData } = await supabase
       .from("users")
@@ -592,7 +785,6 @@ async function handleWithdrawalAction(callbackQuery: any) {
     }
   }
   
-  // Update withdrawal status
   const { error: updateError } = await supabase
     .from("withdrawals")
     .update({ 
@@ -609,13 +801,11 @@ async function handleWithdrawalAction(callbackQuery: any) {
   
   console.log(`[WITHDRAWAL] Status updated to ${newStatus}`);
   
-  // Notify user
   if (withdrawal.user) {
     await sendTelegramMessage(withdrawal.user.telegram_id, userMessage);
     console.log(`[WITHDRAWAL] User ${withdrawal.user.telegram_id} notified`);
   }
   
-  // Update admin message with new status and appropriate buttons
   const updatedMessage = `${statusEmoji} <b>Pul yechish so'rovi - ${statusText}</b>\n\n` +
     `👤 Foydalanuvchi: ${withdrawal.user?.first_name || ''} ${withdrawal.user?.last_name || ''}\n` +
     `📱 Username: @${withdrawal.user?.username || "yo'q"}\n` +
@@ -624,7 +814,6 @@ async function handleWithdrawalAction(callbackQuery: any) {
     `📍 Hamyon: ${withdrawal.wallet_address || "ko'rsatilmagan"}\n` +
     `✅ Holat: ${statusText}`;
   
-  // Only show "To'lash" button for approved status
   let keyboard = undefined;
   if (newStatus === "approved") {
     keyboard = {
@@ -654,7 +843,7 @@ async function handleShowRules(callbackQuery: any) {
     `• Har bir ishtirok uchun 1 ta chipta kerak\n` +
     `• Mos kelgan raqamlar soni bo'yicha mukofot beriladi\n\n` +
     `💰 <b>Tanga ishlash yo'llari</b>\n` +
-    `• Reklama ko'rish (har 2 soatda yangilanadi)\n` +
+    `• Reklama ko'rish (har 6 soatda yangilanadi)\n` +
     `• Do'stlarni taklif qilish (+50 tanga)\n` +
     `• Kanallarga obuna bo'lish\n` +
     `• G'ildirak aylantirish\n` +
@@ -709,6 +898,8 @@ async function handleBackToMenu(callbackQuery: any) {
   }
 }
 
+// ============ MAIN HANDLER ============
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -721,13 +912,52 @@ serve(async (req) => {
     if (body.message) {
       const message = body.message;
       const text = message.text || "";
+      const caption = message.caption || "";
+      const userId = message.from.id;
+      const isAdmin = String(userId) === String(TELEGRAM_ADMIN_ID);
       
-      if (text.startsWith("/start")) {
-        await handleStart(message);
+      // Check if admin is in broadcast mode
+      if (isAdmin && adminStates.get(userId) === "waiting_broadcast") {
+        if (text === "❌ Bekor qilish") {
+          await handleCancelBroadcast(message);
+        } else {
+          // Any text or photo message = broadcast
+          await handleBroadcastMessage(message);
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       
-      if (text === "/users") {
+      // Admin reply keyboard buttons
+      if (isAdmin) {
+        if (text === "📨 Xabar yuborish") {
+          await handleBroadcastStart(message);
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (text === "📊 Statistika") {
+          await handleAdminStats(message);
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (text === "❌ Admin panelni yopish") {
+          await handleCloseAdmin(message);
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      
+      // Commands
+      if (text.startsWith("/start")) {
+        await handleStart(message);
+      } else if (text === "/users") {
         await handleUsersCommand(message);
+      } else if (text === "/admin") {
+        await handleAdminCommand(message);
       }
     }
     
