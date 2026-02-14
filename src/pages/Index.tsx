@@ -35,11 +35,11 @@ const Index = () => {
     initTelegramApp();
   }, []);
 
-  // Reduced refresh interval to 15 seconds for better performance
+  // Fast refresh interval - 5 seconds for responsive balance updates
   useEffect(() => {
     const interval = setInterval(() => {
       refreshUserData();
-    }, 15000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [refreshUserData]);
 
