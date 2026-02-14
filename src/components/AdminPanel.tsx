@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -91,17 +91,17 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const [showRejectModal, setShowRejectModal] = useState<string | null>(null);
   const [withdrawalSearch, setWithdrawalSearch] = useState('');
 
-  // Filtered withdrawals based on search
-  const filteredWithdrawals = withdrawals.filter(w => {
-    if (!withdrawalSearch.trim()) return true;
+  // Memoized filtered withdrawals for fast search
+  const filteredWithdrawals = useMemo(() => {
+    if (!withdrawalSearch.trim()) return withdrawals;
     const q = withdrawalSearch.toLowerCase().trim();
-    return (
+    return withdrawals.filter(w => 
       (w.telegram_id?.toString() || '').includes(q) ||
       (w.username || '').toLowerCase().includes(q) ||
       (w.first_name || '').toLowerCase().includes(q) ||
       (w.id || '').toLowerCase().includes(q)
     );
-  });
+  }, [withdrawals, withdrawalSearch]);
   
   // User management
   const [searchTelegramId, setSearchTelegramId] = useState('');
