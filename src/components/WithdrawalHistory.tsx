@@ -22,7 +22,9 @@ interface Withdrawal {
   rejection_reason?: string | null;
 }
 
-const COIN_TO_SOM_RATE = 1.3; // 10000 tanga = 13000 som
+const NEW_COIN_TO_SOM_RATE = 1.3; // 10000 tanga = 13000 som (yangi kurs)
+const OLD_COIN_TO_SOM_RATE = 2; // 10000 tanga = 20000 som (eski kurs)
+const RATE_CHANGE_DATE = '2026-02-14T00:00:00Z'; // Kurs o'zgargan sana
 
 export const WithdrawalHistory = () => {
   const { user } = useTelegram();
@@ -158,7 +160,7 @@ export const WithdrawalHistory = () => {
               <div>
                 <span className="font-semibold text-foreground">{withdrawal.amount.toLocaleString()} tanga</span>
                 <span className="text-[10px] text-muted-foreground ml-1">
-                  = {(withdrawal.amount * COIN_TO_SOM_RATE).toLocaleString()} so'm
+                  = {(withdrawal.amount * (new Date(withdrawal.created_at) >= new Date(RATE_CHANGE_DATE) ? NEW_COIN_TO_SOM_RATE : OLD_COIN_TO_SOM_RATE)).toLocaleString()} so'm
                 </span>
               </div>
             </div>

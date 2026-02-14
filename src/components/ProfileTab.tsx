@@ -244,14 +244,14 @@ export const ProfileTab = () => {
         <>
           {/* Payment Schedule Info */}
           <div className="glass-card-elevated p-3">
-            <div className="flex items-center gap-3 p-2.5 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 rounded-xl border border-red-200/50 dark:border-red-800/30">
+            <div className="flex items-center gap-3 p-2.5 rounded-xl border border-red-200/50 dark:border-red-800/30">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center shadow-md">
                 <span className="text-lg">📅</span>
               </div>
               <div className="flex-1">
-                <p className="text-xs font-bold text-red-700 dark:text-red-300">To'lov muddati</p>
-                <p className="text-[11px] text-red-600 dark:text-red-400">
-                  So'rovlar <span className="font-bold">1 kundan 14 kun</span> ichida ko'rib chiqiladi
+                <p className="text-xs font-bold text-red-600 dark:text-red-400">To'lov muddati</p>
+                <p className="text-[11px] text-foreground">
+                  So'rovlar <span className="font-bold text-red-600 dark:text-red-400">1 kundan 14 kun</span> ichida ko'rib chiqiladi
                 </p>
               </div>
             </div>
