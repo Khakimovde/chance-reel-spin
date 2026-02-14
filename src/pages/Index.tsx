@@ -7,7 +7,7 @@ import { initTelegramApp, getTelegramUser } from '@/lib/telegram';
 import { Coins, Shield, Loader2 } from 'lucide-react';
 
 // Lazy load non-critical tabs for faster initial load
-const EggGame = lazy(() => import('@/components/EggGame').then(m => ({ default: m.EggGame })));
+const LeaderboardTab = lazy(() => import('@/components/LeaderboardTab').then(m => ({ default: m.LeaderboardTab })));
 const MysteryTab = lazy(() => import('@/components/MysteryTab').then(m => ({ default: m.MysteryTab })));
 const HistoryTab = lazy(() => import('@/components/HistoryTab').then(m => ({ default: m.HistoryTab })));
 const ProfileTab = lazy(() => import('@/components/ProfileTab').then(m => ({ default: m.ProfileTab })));
@@ -51,8 +51,8 @@ const Index = () => {
     switch (activeTab) {
       case 'lottery':
         return <LotteryTab />;
-      case 'egg':
-        return <Suspense fallback={<TabLoader />}><EggGame /></Suspense>;
+      case 'leaderboard':
+        return <Suspense fallback={<TabLoader />}><LeaderboardTab /></Suspense>;
       case 'mystery':
         return <Suspense fallback={<TabLoader />}><MysteryTab /></Suspense>;
       case 'history':
