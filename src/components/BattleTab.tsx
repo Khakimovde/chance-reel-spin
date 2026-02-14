@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getTelegramUser } from '@/lib/telegram';
@@ -7,9 +7,9 @@ import { showAd } from '@/lib/adService';
 import { toast } from 'sonner';
 import { BattleTimer } from './battle/BattleTimer';
 import { BattleParticipants } from './battle/BattleParticipants';
-import { BattleResults } from './battle/BattleResults';
 import { BattleResultModal } from './battle/BattleResultModal';
 import { BattleHistory } from './battle/BattleHistory';
+import { BattleSelectionAnimation } from './battle/BattleSelectionAnimation';
 
 const BATTLE_INTERVAL = 30 * 60 * 1000;
 
@@ -50,19 +50,18 @@ function getPreviousRoundSlot(): string {
 export const BattleTab = () => {
   const [timeLeft, setTimeLeft] = useState({ minutes: 0, seconds: 0 });
   const [currentRound, setCurrentRound] = useState<BattleRound | null>(null);
-  const [lastRound, setLastRound] = useState<BattleRound | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [lastParticipants, setLastParticipants] = useState<Participant[]>([]);
   const [hasJoined, setHasJoined] = useState(false);
   const [joining, setJoining] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showSelection, setShowSelection] = useState(false);
+  const [selectionParticipants, setSelectionParticipants] = useState<Participant[]>([]);
   const [resultModal, setResultModal] = useState<{ open: boolean; isWinner: boolean; reward: number }>({
     open: false, isWinner: false, reward: 0
   });
 
   const telegramUser = getTelegramUser();
 
-  // Timer
   useEffect(() => {
     const update = () => {
       const diff = getTimeUntilNextRound();
@@ -89,42 +88,29 @@ export const BattleTab = () => {
       const cr = currentRes.data as BattleRound | null;
       const pr = prevRes.data as BattleRound | null;
       setCurrentRound(cr);
-      setLastRound(pr);
 
-      const promises: Array<Promise<unknown>> = [];
       if (cr) {
-        promises.push(
-          (supabase.from('battle_participants').select('*').eq('round_id', cr.id) as any).then((r: any) => {
-            const parts = (r.data || []) as Participant[];
-            setParticipants(parts);
-            if (telegramUser) {
-              setHasJoined(parts.some(p => p.telegram_id === telegramUser.id));
-            }
-          })
-        );
+        const { data } = await supabase.from('battle_participants').select('*').eq('round_id', cr.id);
+        const parts = (data || []) as Participant[];
+        setParticipants(parts);
+        if (telegramUser) {
+          setHasJoined(parts.some(p => p.telegram_id === telegramUser.id));
+        }
       } else {
         setParticipants([]);
         setHasJoined(false);
       }
 
-      if (pr && pr.status === 'completed') {
-        promises.push(
-          (supabase.from('battle_participants').select('*').eq('round_id', pr.id) as any).then((r: any) => {
-            const lastParts = (r.data || []) as Participant[];
-            setLastParticipants(lastParts);
-
-            // Show result modal if user participated in last round
-            if (telegramUser) {
-              const myResult = lastParts.find(p => p.telegram_id === telegramUser.id);
-              if (myResult && !resultModal.open) {
-                setResultModal({ open: true, isWinner: myResult.is_winner, reward: myResult.reward });
-              }
-            }
-          })
-        );
+      // Check last round for result modal + selection animation
+      if (pr && pr.status === 'completed' && telegramUser) {
+        const { data: lastParts } = await supabase.from('battle_participants').select('*').eq('round_id', pr.id);
+        const lp = (lastParts || []) as Participant[];
+        const myResult = lp.find(p => p.telegram_id === telegramUser.id);
+        if (myResult && !resultModal.open && !showSelection) {
+          setSelectionParticipants(lp);
+          setShowSelection(true);
+        }
       }
-
-      await Promise.all(promises);
     } catch (err) {
       console.error('Battle fetch error:', err);
     } finally {
@@ -146,6 +132,16 @@ export const BattleTab = () => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
+
+  const handleSelectionComplete = () => {
+    setShowSelection(false);
+    if (telegramUser && selectionParticipants.length > 0) {
+      const myResult = selectionParticipants.find(p => p.telegram_id === telegramUser.id);
+      if (myResult) {
+        setResultModal({ open: true, isWinner: myResult.is_winner, reward: myResult.reward });
+      }
+    }
+  };
 
   const handleJoin = async () => {
     if (!telegramUser || hasJoined || joining) return;
@@ -205,7 +201,6 @@ export const BattleTab = () => {
         <BattleHistory telegramId={telegramUser?.id} />
       </div>
 
-      {/* Timer */}
       <BattleTimer minutes={timeLeft.minutes} seconds={timeLeft.seconds} />
 
       {/* Join Button */}
@@ -228,13 +223,14 @@ export const BattleTab = () => {
         )}
       </motion.button>
 
-      {/* Current participants */}
       <BattleParticipants participants={participants} />
 
-      {/* Last round results */}
-      {lastRound?.status === 'completed' && lastParticipants.length > 0 && (
-        <BattleResults round={lastRound} participants={lastParticipants} />
-      )}
+      {/* Selection Animation */}
+      <BattleSelectionAnimation
+        participants={selectionParticipants}
+        isOpen={showSelection}
+        onComplete={handleSelectionComplete}
+      />
 
       {/* Result modal */}
       <BattleResultModal

@@ -94,7 +94,7 @@ export const BattleResultModal = ({ isOpen, isWinner, reward, onClose }: BattleR
               <p className="text-white/70 text-xs">
                 {isWinner
                   ? 'Tangalar balansingizga qo\'shildi!'
-                  : 'Ishtirok uchun 40 tanga berildi. Yana urinib ko\'ring!'}
+                  : 'Ishtirok uchun 10 tanga berildi. Yana urinib ko\'ring!'}
               </p>
 
               {/* Button */}

@@ -59,7 +59,7 @@ export const BattleResults = ({ round, participants }: { round: BattleRound; par
           <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-red-500/10 to-rose-500/5 border border-red-200/30 p-3 text-center">
             <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
             <p className="text-2xl font-black text-red-500">{losers.length}</p>
-            <p className="text-[10px] text-red-500 font-semibold mt-0.5">Yutqizganlar (+40 🪙)</p>
+            <p className="text-[10px] text-red-500 font-semibold mt-0.5">Yutqizganlar (+10 🪙)</p>
           </div>
         </div>
 
@@ -107,7 +107,7 @@ export const BattleResults = ({ round, participants }: { round: BattleRound; par
                 >
                   <img src={getAvatar(p)} alt="" className="w-8 h-8 rounded-full ring-1 ring-red-300 opacity-80" />
                   <span className="text-sm font-medium flex-1 truncate text-muted-foreground">{getName(p)}</span>
-                  <span className="text-xs font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full">+40 🪙</span>
+                  <span className="text-xs font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full">+10 🪙</span>
                 </motion.div>
               ))}
             </div>
