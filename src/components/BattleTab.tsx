@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -61,6 +61,7 @@ export const BattleTab = () => {
   });
 
   const telegramUser = getTelegramUser();
+  const shownRoundRef = useRef<string | null>(null);
 
   useEffect(() => {
     const update = () => {
@@ -102,11 +103,12 @@ export const BattleTab = () => {
       }
 
       // Check last round for result modal + selection animation
-      if (pr && pr.status === 'completed' && telegramUser) {
+      if (pr && pr.status === 'completed' && telegramUser && shownRoundRef.current !== pr.id) {
         const { data: lastParts } = await supabase.from('battle_participants').select('*').eq('round_id', pr.id);
         const lp = (lastParts || []) as Participant[];
         const myResult = lp.find(p => p.telegram_id === telegramUser.id);
-        if (myResult && !resultModal.open && !showSelection) {
+        if (myResult) {
+          shownRoundRef.current = pr.id;
           setSelectionParticipants(lp);
           setShowSelection(true);
         }
