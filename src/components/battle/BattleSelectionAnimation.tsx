@@ -64,19 +64,25 @@ export const BattleSelectionAnimation = ({
   useEffect(() => {
     if (phase !== 'revealing') return;
 
-    const maxShow = Math.min(winners.length, 50); // Show max 50 for performance
-    let idx = 0;
+    const maxShow = Math.min(winners.length, 50);
+    if (maxShow === 0) {
+      setMyResult(iAmWinner ? 'won' : 'lost');
+      setPhase('result');
+      return;
+    }
 
-    // Speed: faster for more winners (min 80ms, max 300ms per entry)
     const speed = Math.max(80, Math.min(300, 4000 / maxShow));
+    let idx = 0;
 
     revealTimerRef.current = setInterval(() => {
       if (idx < maxShow) {
-        setRevealedWinners(prev => [...prev, winners[idx]]);
+        const winner = winners[idx];
+        if (winner) {
+          setRevealedWinners(prev => [...prev, winner]);
+        }
         idx++;
       } else {
         cleanup();
-        // Short pause then show result
         setTimeout(() => {
           setMyResult(iAmWinner ? 'won' : 'lost');
           setPhase('result');
