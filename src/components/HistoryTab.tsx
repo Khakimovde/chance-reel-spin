@@ -106,8 +106,8 @@ export const HistoryTab = () => {
           <div className="flex items-center justify-center mb-1">
             <Coins className="w-4 h-4 text-amber-500" />
           </div>
-          <p className="text-xl font-bold text-amber-500">{totalEarned}</p>
-          <p className="text-[10px] text-muted-foreground">Tanga</p>
+          <p className="text-xl font-bold text-green-500">${totalEarned}</p>
+          <p className="text-[10px] text-muted-foreground">Dollar</p>
         </div>
       </div>
 

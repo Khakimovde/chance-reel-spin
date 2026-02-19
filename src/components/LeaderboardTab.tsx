@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Crown, Medal, Star, Coins, User } from 'lucide-react';
+import { Trophy, Crown, Medal, Star, DollarSign, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getTelegramUser } from '@/lib/telegram';
 
@@ -82,7 +82,7 @@ export const LeaderboardTab = () => {
         </div>
         <div>
           <h2 className="text-base font-black leading-tight">Lider Jadvali</h2>
-          <p className="text-[10px] text-muted-foreground font-medium">Top 30 eng ko'p tangali o'yinchilar</p>
+          <p className="text-[10px] text-muted-foreground font-medium">Top 30 eng ko'p $li o'yinchilar</p>
         </div>
       </div>
 
@@ -100,9 +100,9 @@ export const LeaderboardTab = () => {
             <p className="text-xs text-muted-foreground">Sizning o'rningiz</p>
             <p className="text-sm font-bold">#{myRank.rank} — {getDisplayName(myRank.user)}</p>
           </div>
-          <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/50 px-2 py-1 rounded-full shrink-0">
-            <Coins className="w-3 h-3 text-amber-500" />
-            <span className="text-xs font-bold text-amber-700">{myRank.user.coins.toLocaleString()}</span>
+          <div className="flex items-center gap-1 bg-green-50 border border-green-200/50 px-2 py-1 rounded-full shrink-0">
+            <DollarSign className="w-3 h-3 text-green-500" />
+            <span className="text-xs font-bold text-green-700">${myRank.user.coins.toLocaleString()}</span>
           </div>
         </motion.div>
       )}
@@ -140,8 +140,8 @@ export const LeaderboardTab = () => {
                     {isMe && <span className="text-primary text-[9px] ml-0.5">(Siz)</span>}
                   </p>
                   <div className="flex items-center gap-0.5 mt-0.5">
-                    <Coins className="w-3 h-3 text-amber-500" />
-                    <span className="text-[10px] font-bold text-amber-700">{user.coins.toLocaleString()}</span>
+                    <DollarSign className="w-3 h-3 text-green-500" />
+                    <span className="text-[10px] font-bold text-green-700">${user.coins.toLocaleString()}</span>
                   </div>
                   <div className={`w-full mt-1.5 rounded-t-lg bg-gradient-to-br ${colors.bg} flex items-center justify-center ${isFirst ? 'h-14' : podiumIdx === 1 ? 'h-10' : 'h-8'}`}>
                     <span className="text-white font-black text-sm">#{podiumIdx + 1}</span>
@@ -187,9 +187,9 @@ export const LeaderboardTab = () => {
                       <span className="text-[10px] text-muted-foreground">{user.telegram_id}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/50 px-2 py-0.5 rounded-full shrink-0">
-                    <Coins className="w-3 h-3 text-amber-500" />
-                    <span className="text-[11px] font-bold text-amber-700">{user.coins.toLocaleString()}</span>
+                  <div className="flex items-center gap-1 bg-green-50 border border-green-200/50 px-2 py-0.5 rounded-full shrink-0">
+                    <DollarSign className="w-3 h-3 text-green-500" />
+                    <span className="text-[11px] font-bold text-green-700">${user.coins.toLocaleString()}</span>
                   </div>
                 </motion.div>
               );

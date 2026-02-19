@@ -196,7 +196,7 @@ export const MysteryBoxGame = () => {
             </div>
 
             <div className="text-center text-xs text-muted-foreground">
-              Balans: <span className="font-bold text-amber-500">{userCoins}</span> tanga
+              Balans: <span className="font-bold text-green-500">${userCoins}</span>
             </div>
           </div>
 
@@ -227,7 +227,7 @@ export const MysteryBoxGame = () => {
         <div className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground mb-1">9 ta sandiqdan birini tanlang!</p>
-            <p className="text-xs text-amber-500">Tikish: {betAmount} tanga</p>
+            <p className="text-xs text-green-500">Tikish: ${betAmount}</p>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -302,7 +302,7 @@ export const MysteryBoxGame = () => {
 
               <div>
                 <p className="text-lg text-muted-foreground">{finalReward.multiplier > 0 ? '🎉 Tabriklaymiz!' : "Bo'sh chiqdi!"}</p>
-                <p className="text-3xl font-black mt-2 text-foreground">{finalReward.multiplier > 0 ? `+${winAmount} Tanga` : "Yutkizdingiz"}</p>
+                <p className="text-3xl font-black mt-2 text-foreground">{finalReward.multiplier > 0 ? `+$${winAmount}` : "Yutkizdingiz"}</p>
               </div>
 
               <motion.button

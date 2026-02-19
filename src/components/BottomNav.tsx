@@ -16,7 +16,7 @@ const tabs = [
 
 export const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/98 backdrop-blur-xl border-t border-border">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/98 backdrop-blur-xl border-t-2 border-border">
       <div className="flex items-center justify-around px-1 py-1.5 max-w-md mx-auto">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -25,25 +25,26 @@ export const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`relative flex flex-col items-center justify-center py-1 px-2 rounded-lg transition-colors ${
+              className={`relative flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-colors ${
                 isActive ? 'text-primary' : 'text-muted-foreground'
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeTab"
-                  className="absolute inset-0 bg-primary/10 rounded-lg"
+                  className="absolute inset-0 bg-primary/10 rounded-xl border-2 border-primary/20"
+                  style={{ boxShadow: '0 2px 0 hsl(250 80% 85%)' }}
                   transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
                 />
               )}
               <motion.div
                 className="relative z-10"
-                animate={isActive ? { scale: [1, 1.1, 1] } : {}}
+                animate={isActive ? { scale: [1, 1.15, 1] } : {}}
                 transition={{ duration: 0.2 }}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
               </motion.div>
-              <span className={`text-[9px] font-medium relative z-10 mt-0.5 ${isActive ? 'text-primary' : ''}`}>
+              <span className={`text-[9px] font-bold relative z-10 mt-0.5 ${isActive ? 'text-primary' : ''}`}>
                 {tab.label}
               </span>
             </button>

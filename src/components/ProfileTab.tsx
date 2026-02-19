@@ -5,7 +5,7 @@ import { TrustBadge } from './TrustBadge';
 import { WithdrawalHistory } from './WithdrawalHistory';
 import { supabase } from '@/integrations/supabase/client';
 import { 
-  Coins, 
+  DollarSign, 
   Copy, 
   Users, 
   Gift,
@@ -55,7 +55,7 @@ export const ProfileTab = () => {
     const MIN_WITHDRAWAL = 10000;
     
     if (!amount || amount < MIN_WITHDRAWAL) {
-      toast.error(`Minimal yechish: ${MIN_WITHDRAWAL.toLocaleString()} tanga`);
+      toast.error(`Minimal yechish: $${MIN_WITHDRAWAL.toLocaleString()}`);
       return;
     }
     // Validate card number - exactly 16 digits
@@ -93,7 +93,7 @@ export const ProfileTab = () => {
       await refreshUserData();
       
       hapticFeedback('success');
-      toast.success(`${amount} tanga yechish uchun so'rov yuborildi`);
+      toast.success(`$${amount} yechish uchun so'rov yuborildi`);
       setShowWithdrawModal(false);
       setWithdrawAmount('');
       setWalletAddress('');
@@ -145,7 +145,7 @@ export const ProfileTab = () => {
       {/* Compact Stats Row - 2 columns: Umumiy Balans (coins) and Referal */}
       <div className="grid grid-cols-2 gap-2">
         {[
-          { icon: Coins, value: coins, label: 'Umumiy Balans', color: 'text-amber-500', bg: 'bg-amber-50' },
+          { icon: DollarSign, value: coins, label: 'Umumiy Balans', color: 'text-green-500', bg: 'bg-green-50' },
           { icon: Users, value: referralCount, label: 'Referal', color: 'text-green-500', bg: 'bg-green-50' },
         ].map((stat, i) => (
           <motion.div
@@ -199,7 +199,7 @@ export const ProfileTab = () => {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-foreground">Do'stlarni taklif qiling</h3>
-                  <p className="text-[10px] text-muted-foreground">Har bir taklif: 50 tanga</p>
+                  <p className="text-[10px] text-muted-foreground">Har bir taklif: $50</p>
                 </div>
               </div>
             </div>
@@ -271,14 +271,14 @@ export const ProfileTab = () => {
 
             <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg">
               <div className="flex items-center gap-2">
-                <Coins className="w-4 h-4 text-amber-500" />
+                <DollarSign className="w-4 h-4 text-green-500" />
                 <span className="text-xs text-muted-foreground">Mavjud balans:</span>
               </div>
-              <span className="text-sm font-bold text-foreground">{coins.toLocaleString()} tanga</span>
+              <span className="text-sm font-bold text-foreground">${coins.toLocaleString()}</span>
             </div>
 
             <div className="p-2 bg-muted/30 rounded-lg text-center">
-              <p className="text-[10px] text-muted-foreground">10,000 tanga = 17,000 so'm</p>
+              <p className="text-[10px] text-muted-foreground">$10,000 = 17,000 so'm</p>
             </div>
 
             <button
@@ -293,7 +293,7 @@ export const ProfileTab = () => {
             {coins < 10000 && (
               <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
                 <AlertCircle className="w-3 h-3" />
-                Minimal yechish: 10,000 tanga
+                Minimal yechish: $10,000
               </p>
             )}
           </div>
@@ -336,7 +336,7 @@ export const ProfileTab = () => {
                   <Banknote className="w-7 h-7 text-white" />
                 </div>
                 <h3 className="text-lg font-bold">Pul yechish</h3>
-                <p className="text-sm text-muted-foreground">Mavjud: {coins.toLocaleString()} tanga</p>
+                <p className="text-sm text-muted-foreground">Mavjud: ${coins.toLocaleString()}</p>
               </div>
 
               <div className="space-y-2">

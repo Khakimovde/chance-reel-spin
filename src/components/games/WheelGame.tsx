@@ -9,14 +9,14 @@ import { Coins, Clock, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const rewards = [
-  { label: '10', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
-  { label: '5', sublabel: 'Tanga', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
-  { label: '30', sublabel: 'Tanga', icon: Coins, color: '#EF4444', bg: 'from-red-400 to-rose-500', value: 30, type: 'coins' },
-  { label: '10', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
-  { label: '5', sublabel: 'Tanga', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
-  { label: '30', sublabel: 'Tanga', icon: Coins, color: '#EF4444', bg: 'from-red-400 to-rose-500', value: 30, type: 'coins' },
-  { label: '10', sublabel: 'Tanga', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
-  { label: '5', sublabel: 'Tanga', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
+  { label: '$10', sublabel: '', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
+  { label: '$5', sublabel: '', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
+  { label: '$30', sublabel: '', icon: Coins, color: '#EF4444', bg: 'from-red-400 to-rose-500', value: 30, type: 'coins' },
+  { label: '$10', sublabel: '', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
+  { label: '$5', sublabel: '', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
+  { label: '$30', sublabel: '', icon: Coins, color: '#EF4444', bg: 'from-red-400 to-rose-500', value: 30, type: 'coins' },
+  { label: '$10', sublabel: '', icon: Coins, color: '#F59E0B', bg: 'from-amber-400 to-orange-500', value: 10, type: 'coins' },
+  { label: '$5', sublabel: '', icon: Coins, color: '#22C55E', bg: 'from-green-400 to-emerald-500', value: 5, type: 'coins' },
 ];
 
 const segmentColors = [

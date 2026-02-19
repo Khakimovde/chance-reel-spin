@@ -439,8 +439,8 @@ export const LotteryTab = () => {
                 transition={{ delay: 1.2 }}
                 className="mt-3"
               >
-                <p className={`text-2xl font-bold ${matches >= 3 ? 'text-amber-600' : 'text-primary'}`}>
-                  🎉 +{currentReward} Tanga!
+                <p className={`text-2xl font-bold ${matches >= 3 ? 'text-primary' : 'text-primary'}`}>
+                  🎉 +${currentReward}!
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {matches >= 3 ? 'Tabriklaymiz, ajoyib natija!' : 'Rahmat qatnashganingiz uchun!'}
@@ -501,7 +501,7 @@ export const LotteryTab = () => {
           <div className="bg-muted/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Mukofotlar:</p>
             <p className="text-[10px] text-muted-foreground">
-              0-2 tog'ri: 10-30 • 3-4 tog'ri: 40-50 • 5-6 tog'ri: 60-70 • 7 tog'ri: 1000 tanga
+              0-2 tog'ri: $10-30 • 3-4 tog'ri: $40-50 • 5-6 tog'ri: $60-70 • 7 tog'ri: $1000
             </p>
           </div>
         </div>

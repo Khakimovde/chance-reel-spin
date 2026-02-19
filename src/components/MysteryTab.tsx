@@ -175,7 +175,7 @@ export const MysteryTab = () => {
         : `${taskCompletion.watchAd}/10 ta reklama ko'ring`,
       icon: Play,
       image: '🎬',
-      reward: { type: 'coins', value: adRewardCoins, label: `${adRewardCoins} Tanga` },
+      reward: { type: 'coins', value: adRewardCoins, label: `$${adRewardCoins}` },
       maxCount: 10,
       currentCount: taskCompletion.watchAd,
       completed: taskCompletion.watchAd >= 10,
@@ -192,7 +192,7 @@ export const MysteryTab = () => {
         : `${taskCompletion.inviteFriend}/2 ta do'st taklif qiling`,
       icon: Users,
       image: '👥',
-      reward: { type: 'coins', value: 100, label: '100 Tanga' },
+      reward: { type: 'coins', value: 100, label: '$100' },
       maxCount: 2,
       currentCount: taskCompletion.inviteFriend,
       completed: taskCompletion.inviteFriend >= 2,
@@ -285,7 +285,7 @@ export const MysteryTab = () => {
         if (newCount >= 10) {
           const success = await updateCoinsInBackend(adRewardCoins);
           if (success) {
-            toast.success(`🎉 10 ta reklama ko'rildi! +${adRewardCoins} tanga qo'shildi!`);
+            toast.success(`🎉 10 ta reklama ko'rildi! +$${adRewardCoins} qo'shildi!`);
           }
         } else {
           toast.success(`Reklama ko'rildi! ${newCount}/10`);
@@ -382,7 +382,7 @@ export const MysteryTab = () => {
       if (success) {
         // No need to call addCoins - refreshUserData already synced the state
         setChannelSubscriptions(prev => ({ ...prev, [selectedChannelTask.id]: true }));
-        toast.success(`+${selectedChannelTask.reward_amount} tanga qo'shildi!`);
+        toast.success(`+$${selectedChannelTask.reward_amount} qo'shildi!`);
         hapticFeedback('success');
       }
     } else {
@@ -409,7 +409,7 @@ export const MysteryTab = () => {
           Vazifalar
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Vazifalarni bajaring va tanga yutib oling
+          Vazifalarni bajaring va $ yutib oling
         </p>
       </div>
 
@@ -467,11 +467,11 @@ export const MysteryTab = () => {
                 </div>
                 <p className="text-xs text-muted-foreground">{task.description}</p>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 rounded-full bg-amber-100 flex items-center justify-center">
-                      <Coins className="w-2.5 h-2.5 text-amber-600" />
-                    </div>
-                    <span className="text-xs text-amber-600 font-semibold">{task.reward.label}</span>
+                    <div className="flex items-center gap-1">
+                      <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center">
+                        <Coins className="w-2.5 h-2.5 text-green-600" />
+                      </div>
+                    <span className="text-xs text-green-600 font-semibold">{task.reward.label}</span>
                   </div>
                 </div>
                 
@@ -540,10 +540,10 @@ export const MysteryTab = () => {
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <div className="flex items-center gap-1">
-                      <div className="w-4 h-4 rounded-full bg-amber-100 flex items-center justify-center">
-                        <Coins className="w-2.5 h-2.5 text-amber-600" />
+                      <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center">
+                        <Coins className="w-2.5 h-2.5 text-green-600" />
                       </div>
-                      <span className="text-xs text-amber-600 font-semibold">{channel.reward_amount} Tanga</span>
+                      <span className="text-xs text-green-600 font-semibold">${channel.reward_amount}</span>
                     </div>
                     <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                       Cheksiz
@@ -607,14 +607,14 @@ export const MysteryTab = () => {
 
               {selectedTask.taskKey === 'watchAd' && (
                 <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
-                  <p>🎬 10 ta reklamani ko'ring va {adRewardCoins} tanga oling!</p>
+                  <p>🎬 10 ta reklamani ko'ring va ${adRewardCoins}$ oling!</p>
                   <p className="text-xs mt-1">Hozirgi: {taskCompletion.watchAd}/10</p>
                 </div>
               )}
 
               {selectedTask.taskKey === 'inviteFriend' && (
                 <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
-                  <p>👥 2 ta do'st taklif qiling va 160 tanga oling!</p>
+                  <p>👥 2 ta do'st taklif qiling va $160 oling!</p>
                   <p className="text-xs mt-1">Do'st qo'shilganda bot orqali hisoblanadi</p>
                 </div>
               )}
@@ -678,7 +678,7 @@ export const MysteryTab = () => {
 
               <div className="flex items-center justify-center gap-2 py-4">
                 <Coins className="w-6 h-6 text-amber-500" />
-                <span className="text-2xl font-bold">{selectedChannelTask.reward_amount} Tanga</span>
+                <span className="text-2xl font-bold">${selectedChannelTask.reward_amount}</span>
               </div>
 
               <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-xl p-3">
