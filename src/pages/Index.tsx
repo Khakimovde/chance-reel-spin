@@ -4,9 +4,8 @@ import { BottomNav } from '@/components/BottomNav';
 import { LotteryTab } from '@/components/LotteryTab';
 import { useTelegram } from '@/hooks/useTelegram';
 import { initTelegramApp, getTelegramUser } from '@/lib/telegram';
-import { Coins, Shield, Loader2 } from 'lucide-react';
+import { DollarSign, Shield, Loader2 } from 'lucide-react';
 
-// Lazy load non-critical tabs for faster initial load
 const LeaderboardTab = lazy(() => import('@/components/LeaderboardTab').then(m => ({ default: m.LeaderboardTab })));
 const MysteryTab = lazy(() => import('@/components/MysteryTab').then(m => ({ default: m.MysteryTab })));
 const HistoryTab = lazy(() => import('@/components/HistoryTab').then(m => ({ default: m.HistoryTab })));
@@ -15,7 +14,6 @@ const AdminPanel = lazy(() => import('@/components/AdminPanel').then(m => ({ def
 
 const ADMIN_TELEGRAM_ID = 5326022510;
 
-// Loading fallback component
 const TabLoader = () => (
   <div className="flex items-center justify-center py-20">
     <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -27,7 +25,6 @@ const Index = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const { user, refreshUserData } = useTelegram();
   
-  // Check if current user is admin - memoized
   const telegramUser = useMemo(() => getTelegramUser(), []);
   const isAdmin = telegramUser?.id === ADMIN_TELEGRAM_ID;
 
@@ -35,7 +32,6 @@ const Index = () => {
     initTelegramApp();
   }, []);
 
-  // Refresh user data every 30 seconds to reduce DB load
   useEffect(() => {
     const interval = setInterval(() => {
       refreshUserData();
@@ -43,10 +39,8 @@ const Index = () => {
     return () => clearInterval(interval);
   }, [refreshUserData]);
 
-  // Use user's backend-synced data - updates in real-time now
   const coins = user?.coins ?? 0;
 
-  // Memoized tab renderer for performance
   const renderTab = useCallback(() => {
     switch (activeTab) {
       case 'lottery':
@@ -64,31 +58,29 @@ const Index = () => {
     }
   }, [activeTab]);
 
-  // If admin panel is open, show it
   if (showAdminPanel) {
     return <Suspense fallback={<TabLoader />}><AdminPanel onBack={() => setShowAdminPanel(false)} /></Suspense>;
   }
 
   return (
     <div className="min-h-screen bg-background pb-16">
-      {/* Premium Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-xl border-b border-glass-border">
+      {/* 3D Cartoon Header */}
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-xl border-b-2 border-glass-border">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
-            {/* User Info */}
             <div className="flex items-center gap-3">
               <div className="relative">
                 <img
                   src={user?.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.first_name || 'User'}`}
                   alt="Avatar"
-                  className="w-10 h-10 rounded-full user-avatar"
+                  className="w-10 h-10 rounded-full user-avatar border-2 border-primary/30"
                 />
                 <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-success border-2 border-background flex items-center justify-center">
                   <span className="text-[8px]">✓</span>
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="font-semibold text-sm leading-tight">
+                <span className="font-bold text-sm leading-tight">
                   {user?.first_name || 'O\'yinchi'}
                 </span>
                 <span className="text-xs text-muted-foreground leading-tight">
@@ -97,14 +89,14 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Balance Card and Admin Button */}
             <div className="flex items-center gap-2">
               {isAdmin && (
                 <motion.button
                   onClick={() => setShowAdminPanel(true)}
-                  className="flex items-center gap-1.5 bg-gradient-to-r from-red-50 to-rose-50 border border-red-200/50 px-3 py-1.5 rounded-full"
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-red-100 to-rose-100 border-2 border-red-200/50 px-3 py-1.5 rounded-full"
                   whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{ boxShadow: '0 3px 0 hsl(0 60% 80%)' }}
                 >
                   <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center">
                     <Shield className="w-3 h-3 text-white" />
@@ -113,25 +105,25 @@ const Index = () => {
                 </motion.button>
               )}
               <motion.div 
-                key={coins} // Force re-render on coins change
-                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 px-3 py-1.5 rounded-full"
+                key={coins}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-green-100 to-emerald-100 border-2 border-green-200/50 px-3 py-1.5 rounded-full"
                 initial={{ scale: 1.05 }}
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.2 }}
                 whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileTap={{ scale: 0.95 }}
+                style={{ boxShadow: '0 3px 0 hsl(160 50% 75%)' }}
               >
-                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-                  <Coins className="w-3 h-3 text-white" />
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+                  <DollarSign className="w-3 h-3 text-white" />
                 </div>
-                <span className="text-sm font-bold text-amber-700">{coins.toLocaleString()}</span>
+                <span className="text-sm font-extrabold text-green-700">${coins.toLocaleString()}</span>
               </motion.div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="px-4 pt-4">
         <AnimatePresence mode="wait">
           <motion.div
@@ -146,7 +138,6 @@ const Index = () => {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation */}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );

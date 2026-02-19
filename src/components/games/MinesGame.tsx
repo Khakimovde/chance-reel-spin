@@ -235,7 +235,7 @@ export const MinesGame = () => {
             </div>
 
             <div className="text-center text-xs text-muted-foreground">
-              Balans: <span className="font-bold text-amber-500">{userCoins}</span> tanga
+              Balans: <span className="font-bold text-green-500">${userCoins}</span>
             </div>
           </div>
 
@@ -389,7 +389,7 @@ export const MinesGame = () => {
 
               <div>
                 <p className="text-lg text-muted-foreground">{won ? '🎉 Tabriklaymiz!' : '💥 Bomba!'}</p>
-                <p className="text-3xl font-black mt-2 text-foreground">{won ? `+${finalWin} Tanga` : "Yutkizdingiz"}</p>
+                <p className="text-3xl font-black mt-2 text-foreground">{won ? `+$${finalWin}` : "Yutkizdingiz"}</p>
               </div>
 
               <motion.button

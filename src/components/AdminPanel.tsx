@@ -244,7 +244,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const saveMinWithdrawal = async () => {
     const value = parseInt(newMinWithdrawal);
     if (isNaN(value) || value < 100) {
-      toast.error('Minimal 100 tanga bo\'lishi kerak');
+      toast.error('Minimal $100 bo\'lishi kerak');
       return;
     }
 
@@ -271,7 +271,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
   const saveAdRewardCoins = async () => {
     const value = parseInt(newAdRewardCoins);
     if (isNaN(value) || value < 1) {
-      toast.error('Minimal 1 tanga bo\'lishi kerak');
+      toast.error('Minimal $1 bo\'lishi kerak');
       return;
     }
 
@@ -512,7 +512,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       toast.success(
         action === 'approve' ? 'So\'rov tasdiqlandi' :
         action === 'pay' ? 'To\'lov amalga oshirildi' :
-        'So\'rov rad etildi va tangalar qaytarildi'
+        'So\'rov rad etildi va $ qaytarildi'
       );
       
       setRejectionReason('');
@@ -585,7 +585,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
     }
 
     if (action === 'subtract' && amount > foundUser.coins) {
-      toast.error('Foydalanuvchida yetarli tanga yo\'q');
+      toast.error('Foydalanuvchida yetarli $ yo\'q');
       return;
     }
 
@@ -608,8 +608,8 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
       hapticFeedback('success');
       toast.success(
         action === 'add' 
-          ? `${amount} tanga qo'shildi` 
-          : `${amount} tanga ayirildi`
+          ? `$${amount} qo'shildi` 
+          : `$${amount} ayirildi`
       );
       
       // Refresh stats
@@ -835,8 +835,8 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   Tizim statistikasi
                 </h3>
                 <div className="p-3 bg-amber-50 rounded-xl">
-                  <p className="text-xs text-amber-600 mb-1">Tizimdagi jami tangalar</p>
-                  <p className="text-xl font-bold text-amber-700">{stats.totalCoinsInSystem.toLocaleString()} tanga</p>
+                  <p className="text-xs text-amber-600 mb-1">Tizimdagi jami $</p>
+                  <p className="text-xl font-bold text-amber-700">${stats.totalCoinsInSystem.toLocaleString()}</p>
                 </div>
               </motion.div>
 
@@ -858,12 +858,12 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   </div>
                   <div className="p-3 bg-green-50 rounded-xl">
                     <p className="text-xs text-green-600 mb-1">Jami to'langan</p>
-                    <p className="text-xl font-bold text-green-700">{stats.totalWithdrawalsAmount.toLocaleString()} tanga</p>
+                    <p className="text-xl font-bold text-green-700">${stats.totalWithdrawalsAmount.toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="p-3 bg-blue-50 rounded-xl">
                   <p className="text-xs text-blue-600 mb-1">Minimal yechish miqdori</p>
-                  <p className="text-lg font-bold text-blue-700">{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm</p>
+                  <p className="text-lg font-bold text-blue-700">${minWithdrawal.toLocaleString()} = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm</p>
                 </div>
               </motion.div>
             </motion.div>
@@ -881,7 +881,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
               {/* Info Card */}
               <div className="glass-card p-3 bg-blue-50/50">
                 <p className="text-xs text-blue-700">
-                  💡 Minimal yechish: <strong>{minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm</strong>
+                  💡 Minimal yechish: <strong>${minWithdrawal.toLocaleString()} = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm</strong>
                 </p>
               </div>
 
@@ -946,7 +946,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                           {withdrawal.username ? `@${withdrawal.username}` : 'username yo\'q'} • ID: <code className="bg-muted px-1 rounded">{withdrawal.telegram_id || 'yo\'q'}</code>
                         </p>
                         <p className="text-[10px] text-blue-600 mt-0.5">
-                          💰 Joriy balans: <strong>{(withdrawal.user_current_coins || 0).toLocaleString()}</strong> tanga
+                          💰 Joriy balans: <strong>${(withdrawal.user_current_coins || 0).toLocaleString()}</strong>
                         </p>
                       </div>
                       {getStatusBadge(withdrawal.status)}
@@ -955,7 +955,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                     <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg">
                       <span className="text-sm text-muted-foreground">Miqdor:</span>
                       <div className="text-right">
-                        <span className="font-bold text-foreground">{withdrawal.amount.toLocaleString()} tanga</span>
+                        <span className="font-bold text-foreground">${withdrawal.amount.toLocaleString()}</span>
                         <span className="text-xs text-muted-foreground block">= {(withdrawal.amount * (new Date(withdrawal.created_at) >= new Date('2026-02-14T00:00:00Z') ? coinToSomRate : 2)).toLocaleString()} so'm</span>
                       </div>
                     </div>
@@ -1066,7 +1066,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Obuna uchun tanga mukofoti</label>
+                    <label className="text-xs text-muted-foreground block mb-1">Obuna uchun $ mukofoti</label>
                     <input
                       type="number"
                       value={newChannelReward}
@@ -1111,7 +1111,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-medium text-foreground">{channel.channel_username}</p>
-                            <p className="text-xs text-muted-foreground">Mukofot: {channel.reward_amount} tanga</p>
+                            <p className="text-xs text-muted-foreground">Mukofot: ${channel.reward_amount}</p>
                           </div>
                           <div className="flex items-center gap-2">
                             <button
@@ -1243,7 +1243,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
 
                   <div className="p-3 bg-amber-50 rounded-xl">
                     <p className="text-xs text-amber-600 mb-1">Joriy balans</p>
-                    <p className="text-2xl font-bold text-amber-700">{foundUser.coins?.toLocaleString() || 0} tanga</p>
+                    <p className="text-2xl font-bold text-amber-700">${foundUser.coins?.toLocaleString() || 0}</p>
                   </div>
 
                   {/* Block/Unblock User */}
@@ -1272,7 +1272,7 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   </button>
 
                   <div className="space-y-3">
-                    <label className="text-sm font-medium text-foreground">Tanga miqdori</label>
+                    <label className="text-sm font-medium text-foreground">$ miqdori</label>
                     <input
                       type="number"
                       value={coinAmount}
@@ -1438,10 +1438,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   {/* Min Withdrawal */}
                   <div>
                     <label className="text-sm font-medium text-foreground block mb-2">
-                      Minimal pul yechish miqdori (tanga)
+                      Minimal pul yechish miqdori ($)
                     </label>
                     <p className="text-xs text-muted-foreground mb-3">
-                      Hozirgi qiymat: <strong>{minWithdrawal.toLocaleString()}</strong> tanga = <strong>{(minWithdrawal * coinToSomRate).toLocaleString()}</strong> so'm
+                      Hozirgi qiymat: <strong>${minWithdrawal.toLocaleString()}</strong> = <strong>{(minWithdrawal * coinToSomRate).toLocaleString()}</strong> so'm
                     </p>
                     <div className="flex gap-2">
                       <input
@@ -1464,10 +1464,10 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   {/* Ad Reward Coins */}
                   <div className="pt-4 border-t border-border">
                     <label className="text-sm font-medium text-foreground block mb-2">
-                      10 ta reklama ko'rish mukofoti (tanga)
+                      10 ta reklama ko'rish mukofoti ($)
                     </label>
                     <p className="text-xs text-muted-foreground mb-3">
-                      Hozirgi qiymat: <strong>{adRewardCoins}</strong> tanga
+                      Hozirgi qiymat: <strong>${adRewardCoins}</strong>
                     </p>
                     <div className="flex gap-2">
                       <input
@@ -1490,12 +1490,12 @@ export const AdminPanel = ({ onBack }: AdminPanelProps) => {
                   {/* Coin to Som Rate */}
                   <div className="pt-4 border-t border-border">
                     <label className="text-sm font-medium text-foreground block mb-2">
-                      Valyuta kursi (1 tanga = ? so'm)
+                      Valyuta kursi ($1 = ? so'm)
                     </label>
                     <p className="text-xs text-muted-foreground mb-3">
-                      Hozirgi qiymat: 1 tanga = <strong>{coinToSomRate}</strong> so'm
+                      Hozirgi qiymat: $1 = <strong>{coinToSomRate}</strong> so'm
                       <br />
-                      Misol: {minWithdrawal.toLocaleString()} tanga = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm
+                      Misol: ${minWithdrawal.toLocaleString()} = {(minWithdrawal * coinToSomRate).toLocaleString()} so'm
                     </p>
                     <div className="flex gap-2">
                       <input

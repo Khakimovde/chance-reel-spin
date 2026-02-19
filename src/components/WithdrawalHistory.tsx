@@ -158,7 +158,7 @@ export const WithdrawalHistory = () => {
             <div className="flex items-center gap-2">
               <Banknote className="w-4 h-4 text-green-500" />
               <div>
-                <span className="font-semibold text-foreground">{withdrawal.amount.toLocaleString()} tanga</span>
+                <span className="font-semibold text-foreground">${withdrawal.amount.toLocaleString()}</span>
                 <span className="text-[10px] text-muted-foreground ml-1">
                   = {(withdrawal.amount * (new Date(withdrawal.created_at) >= new Date(RATE_CHANGE_DATE) ? NEW_COIN_TO_SOM_RATE : OLD_COIN_TO_SOM_RATE)).toLocaleString()} so'm
                 </span>

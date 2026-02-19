@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Nunito', 'Fredoka', 'sans-serif'],
+        display: ['Fredoka', 'Nunito', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -90,8 +91,8 @@ export default {
           "50%": { transform: "translateY(-10px)" },
         },
         "pulse-glow": {
-          "0%, 100%": { opacity: "1", boxShadow: "0 0 20px hsl(45 100% 55% / 0.3)" },
-          "50%": { opacity: "0.8", boxShadow: "0 0 40px hsl(45 100% 55% / 0.5)" },
+          "0%, 100%": { opacity: "1", boxShadow: "0 0 20px hsl(250 80% 60% / 0.3)" },
+          "50%": { opacity: "0.8", boxShadow: "0 0 40px hsl(250 80% 60% / 0.5)" },
         },
         "shake": {
           "0%, 100%": { transform: "translateX(0) rotate(0)" },
@@ -100,8 +101,12 @@ export default {
         },
         "bounce-in": {
           "0%": { transform: "scale(0)", opacity: "0" },
-          "50%": { transform: "scale(1.1)" },
+          "50%": { transform: "scale(1.15)" },
           "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        "wiggle": {
+          "0%, 100%": { transform: "rotate(-3deg)" },
+          "50%": { transform: "rotate(3deg)" },
         },
       },
       animation: {
@@ -112,6 +117,7 @@ export default {
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "shake": "shake 0.5s ease-in-out",
         "bounce-in": "bounce-in 0.5s ease-out forwards",
+        "wiggle": "wiggle 0.5s ease-in-out infinite",
       },
     },
   },
