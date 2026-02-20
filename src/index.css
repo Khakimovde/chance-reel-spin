@@ -150,12 +150,12 @@
 
   .number-cell-selected {
     @apply w-11 h-11 rounded-2xl flex items-center justify-center font-extrabold text-sm cursor-pointer text-white;
-    background: linear-gradient(145deg, hsl(250 85% 62%), hsl(280 75% 52%));
+    background: linear-gradient(145deg, hsl(200 90% 50%), hsl(190 85% 45%));
     box-shadow: 
-      0 4px 0 hsl(280 80% 40%),
-      0 6px 16px hsl(250 80% 50% / 0.4),
-      inset 0 2px 4px hsl(250 90% 75% / 0.5);
-    border: 2px solid hsl(250 80% 75% / 0.5);
+      0 4px 0 hsl(200 85% 35%),
+      0 6px 16px hsl(200 80% 50% / 0.4),
+      inset 0 2px 4px hsl(195 90% 70% / 0.5);
+    border: 2px solid hsl(195 80% 65% / 0.5);
     transform: scale(1.08);
   }
 
